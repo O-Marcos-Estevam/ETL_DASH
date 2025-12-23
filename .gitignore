@@ -1,0 +1,46 @@
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+.mvn/wrapper/maven-wrapper.properties
+
+# Node / Frontend
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.pytest_cache/
+
+# Portable Runtimes (Large files - Avoid committing)
+# Se quiser versionar, remova as linhas abaixo (Cuidado com limite de 100MB do GitHub)
+java/
+maven/
+node/
+
+# Logs & Temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev_tools/
+legacy/
+scripts/node.zip
+scripts/node_temp/
+*.tmp
+
+# Security / Local Config
+config/credentials.json

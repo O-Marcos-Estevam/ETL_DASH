@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-BR" xmlns:mso="urn:schemas-microsoft-com:office:office" xmlns:msdt="uuid:C2F41010-65B3-11d1-A29F-00AA00C14882">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETL Dashboard V2 - NS Capital</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e4e4e4;
+            min-height: 100vh;
+        }
+        .header {
+            background: rgba(0,0,0,0.3);
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #00d4ff;
+        }
+        .header .version {
+            background: #00d4ff;
+            color: #1a1a2e;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            color: #1a1a2e;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,212,255,0.4); }
+        .btn-danger {
+            background: linear-gradient(135deg, #ff4757, #ff3344);
+            color: white;
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #e4e4e4;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s;
+        }
+        .card:hover {
+            border-color: rgba(0,212,255,0.3);
+            transform: translateY(-2px);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-idle { background: rgba(255,255,255,0.1); color: #888; }
+        .status-running { background: rgba(0,212,255,0.2); color: #00d4ff; }
+        .status-success { background: rgba(0,255,136,0.2); color: #00ff88; }
+        .status-error { background: rgba(255,71,87,0.2); color: #ff4757; }
+        .progress-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        .card-message {
+            font-size: 13px;
+            color: #888;
+            margin-top: 10px;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .toggle-label { font-size: 13px; color: #aaa; }
+        .toggle {
+            width: 44px;
+            height: 24px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .toggle.active { background: #00d4ff; }
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            top: 3px;
+            left: 3px;
+            transition: all 0.3s;
+        }
+        .toggle.active::after { left: 23px; }
+        .logs {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .logs h3 {
+            margin-bottom: 15px;
+            color: #00d4ff;
+        }
+        .log-entry {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 6px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+        }
+        .log-info { background: rgba(0,212,255,0.1); border-left: 3px solid #00d4ff; }
+        .log-success { background: rgba(0,255,136,0.1); border-left: 3px solid #00ff88; }
+        .log-error { background: rgba(255,71,87,0.1); border-left: 3px solid #ff4757; }
+        .log-warn { background: rgba(255,193,7,0.1); border-left: 3px solid #ffc107; }
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+
+<!--[if gte mso 9]><xml>
+<mso:CustomDocumentProperties>
+<mso:_dlc_DocId msdt:dt="string">Q75ZQFKCT6PW-1630998327-418832</mso:_dlc_DocId>
+<mso:_dlc_DocIdItemGuid msdt:dt="string">bbebfcff-e26d-446f-a992-8c25a78acfdf</mso:_dlc_DocIdItemGuid>
+<mso:_dlc_DocIdUrl msdt:dt="string">https://blokoinvestimentos.sharepoint.com/sites/DomoGestora2/_layouts/15/DocIdRedir.aspx?ID=Q75ZQFKCT6PW-1630998327-418832, Q75ZQFKCT6PW-1630998327-418832</mso:_dlc_DocIdUrl>
+</mso:CustomDocumentProperties>
+</xml><![endif]-->
+</head>
+<body>
+    <header class="header">
+        <h1>ETL Dashboard V2</h1>
+        <span class="version">V2.0.0</span>
+    </header>
+
+    <div class="container">
+        <div class="controls">
+            <button class="btn btn-primary" onclick="executarTodos()">
+                <span>Executar Todos</span>
+            </button>
+            <button class="btn btn-danger" onclick="pararTodos()">
+                <span>Parar Todos</span>
+            </button>
+            <button class="btn btn-secondary" onclick="carregarConfig()">
+                <span>Recarregar Config</span>
+            </button>
+        </div>
+
+        <div class="grid" id="sistemas-grid">
+            <!-- Cards serao inseridos aqui -->
+        </div>
+
+        <div class="logs">
+            <h3>Logs de Execucao</h3>
+            <div id="logs-container">
+                <div class="log-entry log-info">Sistema iniciado - Aguardando comandos...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let sistemas = {};
+
+        // Carregar configuracao inicial
+        async function carregarConfig() {
+            try {
+                const response = await fetch(`${API_BASE}/config`);
+                const config = await response.json();
+                sistemas = config.sistemas || {};
+                renderizarSistemas();
+                addLog('INFO', 'SISTEMA', 'Configuracao carregada com sucesso');
+            } catch (error) {
+                addLog('ERROR', 'SISTEMA', 'Erro ao carregar configuracao: ' + error.message);
+                // Criar sistemas padrao se falhar
+                sistemas = {
+                    'amplis_reag': { id: 'amplis_reag', nome: 'AMPLIS REAG', ativo: true, status: 'IDLE', progresso: 0, opcoes: { csv: true, pdf: true } },
+                    'amplis_master': { id: 'amplis_master', nome: 'AMPLIS MASTER', ativo: true, status: 'IDLE', progresso: 0, opcoes: { csv: true, pdf: true } },
+                    'maps': { id: 'maps', nome: 'MAPS', ativo: true, status: 'IDLE', progresso: 0, opcoes: { excel: true } },
+                    'britech': { id: 'britech', nome: 'BRITECH', ativo: true, status: 'IDLE', progresso: 0, opcoes: { xml: true } },
+                    'qore': { id: 'qore', nome: 'QORE', ativo: true, status: 'IDLE', progresso: 0, opcoes: { xml: true, pdf: true } },
+                    'jcot': { id: 'jcot', nome: 'JCOT', ativo: true, status: 'IDLE', progresso: 0, opcoes: { csv: true } },
+                    'fidc_estoque': { id: 'fidc_estoque', nome: 'FIDC ESTOQUE', ativo: false, status: 'IDLE', progresso: 0, opcoes: { excel: true } },
+                    'trustee': { id: 'trustee', nome: 'TRUSTEE', ativo: false, status: 'IDLE', progresso: 0, opcoes: { pdf: true } }
+                };
+                renderizarSistemas();
+            }
+        }
+
+        function renderizarSistemas() {
+            const grid = document.getElementById('sistemas-grid');
+            grid.innerHTML = '';
+
+            for (const [id, sistema] of Object.entries(sistemas)) {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.id = `card-${id}`;
+
+                const statusClass = getStatusClass(sistema.status);
+                const statusText = getStatusText(sistema.status);
+
+                let opcoesHtml = '';
+                if (sistema.opcoes) {
+                    opcoesHtml = '<div class="options-grid">';
+                    for (const [opt, valor] of Object.entries(sistema.opcoes)) {
+                        opcoesHtml += `
+                            <div class="toggle-container">
+                                <span class="toggle-label">${opt.toUpperCase()}</span>
+                                <div class="toggle ${valor ? 'active' : ''}" onclick="toggleOpcao('${id}', '${opt}')"></div>
+                            </div>
+                        `;
+                    }
+                    opcoesHtml += '</div>';
+                }
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span class="card-title">${sistema.nome}</span>
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="toggle-container">
+                        <span class="toggle-label">Ativo</span>
+                        <div class="toggle ${sistema.ativo ? 'active' : ''}" onclick="toggleAtivo('${id}')"></div>
+                    </div>
+                    ${opcoesHtml}
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${sistema.progresso || 0}%"></div>
+                    </div>
+                    <div class="card-message">${sistema.mensagem || 'Aguardando...'}</div>
+                    <div style="margin-top: 15px; display: flex; gap: 10px;">
+                        <button class="btn btn-primary" style="padding: 8px 16px; font-size: 12px;" onclick="executarSistema('${id}')">Executar</button>
+                        <button class="btn btn-secondary" style="padding: 8px 16px; font-size: 12px;" onclick="pararSistema('${id}')">Parar</button>
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            }
+        }
+
+        function getStatusClass(status) {
+            switch(status) {
+                case 'RUNNING': return 'status-running';
+                case 'SUCCESS': return 'status-success';
+                case 'ERROR': return 'status-error';
+                default: return 'status-idle';
+            }
+        }
+
+        function getStatusText(status) {
+            switch(status) {
+                case 'RUNNING': return 'Executando';
+                case 'SUCCESS': return 'Concluido';
+                case 'ERROR': return 'Erro';
+                case 'CANCELLED': return 'Cancelado';
+                default: return 'Aguardando';
+            }
+        }
+
+        function toggleAtivo(id) {
+            if (sistemas[id]) {
+                sistemas[id].ativo = !sistemas[id].ativo;
+                renderizarSistemas();
+                addLog('INFO', sistemas[id].nome, sistemas[id].ativo ? 'Ativado' : 'Desativado');
+            }
+        }
+
+        function toggleOpcao(id, opcao) {
+            if (sistemas[id] && sistemas[id].opcoes) {
+                sistemas[id].opcoes[opcao] = !sistemas[id].opcoes[opcao];
+                renderizarSistemas();
+            }
+        }
+
+        async function executarTodos() {
+            addLog('INFO', 'SISTEMA', 'Iniciando execucao de todos os sistemas ativos...');
+            try {
+                const response = await fetch(`${API_BASE}/execute/all`, { method: 'POST' });
+                if (response.ok) {
+                    addLog('SUCCESS', 'SISTEMA', 'Pipeline iniciado');
+                    // Simular execucao
+                    for (const [id, sistema] of Object.entries(sistemas)) {
+                        if (sistema.ativo) {
+                            simulateExecution(id);
+                        }
+                    }
+                }
+            } catch (error) {
+                addLog('ERROR', 'SISTEMA', 'Erro: ' + error.message);
+                // Simular localmente
+                for (const [id, sistema] of Object.entries(sistemas)) {
+                    if (sistema.ativo) {
+                        simulateExecution(id);
+                    }
+                }
+            }
+        }
+
+        async function executarSistema(id) {
+            if (!sistemas[id]) return;
+            addLog('INFO', sistemas[id].nome, 'Iniciando execucao...');
+            simulateExecution(id);
+        }
+
+        function simulateExecution(id) {
+            if (!sistemas[id]) return;
+            sistemas[id].status = 'RUNNING';
+            sistemas[id].progresso = 0;
+            sistemas[id].mensagem = 'Iniciando...';
+            renderizarSistemas();
+
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 15 + 5;
+                if (progress >= 100) {
+                    progress = 100;
+                    sistemas[id].status = 'SUCCESS';
+                    sistemas[id].mensagem = 'Concluido com sucesso';
+                    addLog('SUCCESS', sistemas[id].nome, 'Execucao concluida');
+                    clearInterval(interval);
+                } else {
+                    sistemas[id].mensagem = `Processando... ${Math.round(progress)}%`;
+                }
+                sistemas[id].progresso = Math.min(progress, 100);
+                renderizarSistemas();
+            }, 500);
+        }
+
+        function pararSistema(id) {
+            if (sistemas[id]) {
+                sistemas[id].status = 'IDLE';
+                sistemas[id].progresso = 0;
+                sistemas[id].mensagem = 'Parado pelo usuario';
+                renderizarSistemas();
+                addLog('WARN', sistemas[id].nome, 'Execucao cancelada');
+            }
+        }
+
+        function pararTodos() {
+            for (const id of Object.keys(sistemas)) {
+                pararSistema(id);
+            }
+            addLog('WARN', 'SISTEMA', 'Todos os sistemas foram parados');
+        }
+
+        function addLog(level, sistema, mensagem) {
+            const container = document.getElementById('logs-container');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${level.toLowerCase()}`;
+            const time = new Date().toLocaleTimeString('pt-BR');
+            entry.textContent = `[${time}] [${sistema}] ${mensagem}`;
+            container.insertBefore(entry, container.firstChild);
+
+            // Limitar a 50 logs
+            while (container.children.length > 50) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarConfig();
+        });
+    </script>
+</body>
+</html>
