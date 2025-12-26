@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(cat:*)",
+      "Bash(python:*)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(dir /S /B *.py)",
+      "Bash(npm run build:*)",
+      "Bash(npx vite:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: Complete ETL Dashboard V2 Implementation\n\nFASE 3 - WebSocket Integration:\n- Fix useEffect dependencies in etl/page.tsx and logs/page.tsx\n- Add stable showToast with useCallback\n- Fix isExecuting logic \\(only set false via WebSocket job_complete\\)\n- Add isPausedRef for stable callback in logs page\n\nFASE 4 - Frontend Forms:\n- Update CredentialsForm with correct BRITECH structure \\(url not host/database\\)\n- Update PathsForm with 11 correct path fields\n- Update FundsForm to use per-system config \\(maps/fidc/qore.fundos_selecionados\\)\n- Add SettingsForm with localStorage persistence\n- Integrate useToast in all forms\n\nFASE 5 - Real Data Integration:\n- Verify executor.py integration with python/main.py\n- Add startup scripts \\(INICIAR_V2.bat, start-backend-v2.bat, start-frontend-v2.bat\\)\n- Downgrade Vite 7.x to 5.x for Node.js 20.10 compatibility\n- Remove TypeScript 5.8+ only options from tsconfig\n- Update README with complete documentation\n\nBackend improvements:\n- Update config_service default credentials structure\n- Add background_worker, sistema_service, config_service\n- Add models \\(Sistema, Job, Config\\)\n- Add routers \\(__init__, credentials, sistemas\\)\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(dir:*)",
+      "Bash(cmd /c \"cd /d \"\"c:\\\\bloko\\\\Fundos - Documentos\\\\00. Monitoramento\\\\01. Rotinas\\\\03. Arquivos Rotina\\\\DEV_ETL\"\" && dir /s /b /a\")",
+      "Bash(find . -maxdepth 1 -type d -exec sh -c 'count=$\\(find \"\"$1\"\" -type f 2>/dev/null | wc -l\\); echo \"\"$1: $count files\"\"' _ {} ;)"
+    ]
+  }
+}

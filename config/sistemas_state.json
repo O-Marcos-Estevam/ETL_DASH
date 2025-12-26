@@ -1,6 +1,6 @@
 {
   "amplis_reag": {
-    "ativo": true,
+    "ativo": false,
     "opcoes": {
       "csv": true,
       "pdf": true
@@ -35,7 +35,7 @@
     "opcoes": {}
   },
   "qore": {
-    "ativo": false,
+    "ativo": true,
     "opcoes": {
       "excel": true,
       "pdf": true,
