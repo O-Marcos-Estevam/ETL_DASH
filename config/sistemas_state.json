@@ -1,0 +1,50 @@
+{
+  "amplis_reag": {
+    "ativo": true,
+    "opcoes": {
+      "csv": true,
+      "pdf": true
+    }
+  },
+  "amplis_master": {
+    "ativo": false,
+    "opcoes": {
+      "csv": true,
+      "pdf": true
+    }
+  },
+  "maps": {
+    "ativo": false,
+    "opcoes": {
+      "excel": true,
+      "pdf": true,
+      "ativo": true,
+      "passivo": true
+    }
+  },
+  "fidc": {
+    "ativo": false,
+    "opcoes": {}
+  },
+  "jcot": {
+    "ativo": false,
+    "opcoes": {}
+  },
+  "britech": {
+    "ativo": false,
+    "opcoes": {}
+  },
+  "qore": {
+    "ativo": false,
+    "opcoes": {
+      "excel": true,
+      "pdf": true,
+      "lote_pdf": false,
+      "lote_excel": false
+    }
+  },
+  "trustee": {
+    "ativo": false,
+    "opcoes": {}
+  }
+}

@@ -1,73 +1,102 @@
-# React + TypeScript + Vite
+# ETL Dashboard V2
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Dashboard moderno para gerenciamento de pipelines ETL.
 
-Currently, two official plugins are available:
+## Stack Tecnologica
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Backend**: Python FastAPI + SQLite
+- **Frontend**: React + TypeScript + Vite + shadcn/ui
+- **WebSocket**: Comunicacao em tempo real para logs
 
-## React Compiler
+## Estrutura
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+V2/
+├── backend/           # FastAPI Backend
+│   ├── app.py         # Aplicacao principal
+│   ├── database.py    # SQLite para jobs
+│   ├── routers/       # Endpoints API
+│   ├── services/      # Logica de negocio
+│   └── models/        # Modelos Pydantic
+├── src/               # Frontend React
+│   ├── pages/         # Paginas (ETL, Logs, Settings)
+│   ├── components/    # Componentes UI
+│   └── services/      # API e WebSocket
+├── scripts/           # Scripts de inicializacao
+└── INICIAR_V2.bat     # Launcher principal
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Como Iniciar
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Opcao 1: Launcher Automatico
+```batch
+V2\INICIAR_V2.bat
+```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Opcao 2: Manual
+
+**Terminal 1 - Backend:**
+```batch
+cd V2\backend
+python app.py
+```
+
+**Terminal 2 - Frontend:**
+```batch
+cd V2
+npm run dev
+```
+
+## URLs
+
+- Frontend: http://localhost:4000
+- Backend API: http://localhost:4001
+- API Docs (Swagger): http://localhost:4001/docs
+- WebSocket: ws://localhost:4001/ws
+
+## Endpoints API
+
+| Metodo | Endpoint | Descricao |
+|--------|----------|-----------|
+| GET | /api/health | Health check |
+| GET | /api/sistemas | Lista sistemas |
+| GET | /api/config | Configuracao atual |
+| POST | /api/execute | Executar pipeline |
+| POST | /api/cancel/{id} | Cancelar job |
+| GET | /api/jobs | Listar jobs |
+| GET | /api/credentials | Credenciais (mascaradas) |
+| POST | /api/credentials | Salvar credenciais |
+
+## WebSocket
+
+Conecte em `ws://localhost:4001/ws` para receber:
+
+- `log`: Logs em tempo real
+- `status`: Atualizacao de status dos sistemas
+- `job_complete`: Notificacao de job finalizado
+
+## Configuracao
+
+Credenciais em: `config/credentials.json`
+
+Estrutura:
+- `maps`, `fidc`, `jcot`, `britech`, `qore`: Credenciais por sistema
+- `amplis.reag`, `amplis.master`: Credenciais AMPLIS
+- `paths`: Diretorios de arquivos
+- `[sistema].fundos`: Lista de fundos disponiveis
+- `[sistema].usar_todos`: Se true, processa todos os fundos
+- `[sistema].fundos_selecionados`: Fundos selecionados manualmente
+
+## Desenvolvimento
+
+```bash
+# Instalar dependencias frontend
+cd V2
+npm install
+
+# Verificar tipos TypeScript
+npm run typecheck
+
+# Build producao
+npm run build
 ```

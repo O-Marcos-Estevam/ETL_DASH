@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Activity, CheckCircle2, XCircle, Wifi, WifiOff, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { KpiCard } from "@/components/dashboard/kpi-card"
@@ -9,7 +9,7 @@ import {
     CredentialsModal
 } from "@/components/etl"
 import { api } from "@/services/api"
-import { ws } from "@/services/websocket"
+import { ws, type JobCompletePayload } from "@/services/websocket"
 import type { ConfiguracaoETL, Periodo, StatusUpdate } from "@/types/etl"
 
 export function EtlPage() {
@@ -21,49 +21,20 @@ export function EtlPage() {
     const [credentialsOpen, setCredentialsOpen] = useState(false)
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
-    // Load config on mount
-    useEffect(() => {
-        loadConfig()
-        connectWebSocket()
+    // Ref para evitar closures stale em callbacks
+    const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-        return () => {
-            ws.disconnect()
+    // showToast estável com useCallback
+    const showToast = useCallback((message: string, type: 'success' | 'error') => {
+        if (toastTimeoutRef.current) {
+            clearTimeout(toastTimeoutRef.current)
         }
+        setToast({ message, type })
+        toastTimeoutRef.current = setTimeout(() => setToast(null), 5000)
     }, [])
 
-    const loadConfig = async () => {
-        try {
-            setLoading(true)
-            const data = await api.getConfig()
-            setConfig(data)
-        } catch (error) {
-            console.error("Erro ao carregar configuração:", error)
-            // Initialize with default config
-            setConfig({
-                versao: '2.0',
-                ultimaModificacao: new Date().toISOString(),
-                periodo: { dataInicial: null, dataFinal: null, usarD1Anbima: true },
-                sistemas: {}
-            })
-            showToast("Erro ao conectar com o servidor", "error")
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const connectWebSocket = async () => {
-        try {
-            await ws.connect()
-            setIsConnected(true)
-
-            ws.onConnectionChange((connected) => setIsConnected(connected))
-            ws.onStatusUpdate(handleStatusUpdate)
-        } catch (error) {
-            console.warn("WebSocket não conectado:", error)
-        }
-    }
-
-    const handleStatusUpdate = (sistemaId: string, status: StatusUpdate) => {
+    // Handler para status updates via WebSocket
+    const handleStatusUpdate = useCallback((sistemaId: string, status: StatusUpdate) => {
         setConfig(prev => {
             if (!prev?.sistemas[sistemaId]) return prev
             return {
@@ -79,13 +50,81 @@ export function EtlPage() {
                 }
             }
         })
-    }
+    }, [])
 
-    const showToast = (message: string, type: 'success' | 'error') => {
-        console.log("showToast called:", message, type)
-        setToast({ message, type })
-        setTimeout(() => setToast(null), 5000)
-    }
+    // Handler para job complete via WebSocket
+    const handleJobComplete = useCallback((payload: JobCompletePayload) => {
+        const currentJobId = localStorage.getItem('current_etl_job_id')
+        if (currentJobId && payload.job_id === Number(currentJobId)) {
+            setIsExecuting(false)
+            const isSuccess = payload.status === 'completed'
+            showToast(
+                isSuccess
+                    ? `Pipeline concluído com sucesso! (${payload.duracao_segundos}s)`
+                    : `Pipeline finalizado com erro (${payload.duracao_segundos}s)`,
+                isSuccess ? 'success' : 'error'
+            )
+        }
+    }, [showToast])
+
+    // Load config on mount
+    useEffect(() => {
+        const loadConfig = async () => {
+            try {
+                setLoading(true)
+                const data = await api.getConfig()
+                setConfig(data)
+            } catch (error) {
+                console.error("Erro ao carregar configuração:", error)
+                setConfig({
+                    versao: '2.0',
+                    ultimaModificacao: new Date().toISOString(),
+                    periodo: { dataInicial: null, dataFinal: null, usarD1Anbima: true },
+                    sistemas: {}
+                })
+                showToast("Erro ao conectar com o servidor", "error")
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        loadConfig()
+    }, [showToast])
+
+    // Setup WebSocket connection and subscriptions
+    useEffect(() => {
+        const connectWebSocket = async () => {
+            try {
+                ws.resetReconnect()
+                await ws.connect()
+            } catch (error) {
+                console.warn("WebSocket não conectado:", error)
+            }
+        }
+
+        connectWebSocket()
+
+        // Subscribe to WebSocket events
+        const unsubConnection = ws.onConnectionChange(setIsConnected)
+        const unsubStatus = ws.onStatusUpdate(handleStatusUpdate)
+        const unsubJobComplete = ws.onJobComplete(handleJobComplete)
+
+        return () => {
+            unsubConnection()
+            unsubStatus()
+            unsubJobComplete()
+            ws.disconnect()
+        }
+    }, [handleStatusUpdate, handleJobComplete])
+
+    // Cleanup toast timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (toastTimeoutRef.current) {
+                clearTimeout(toastTimeoutRef.current)
+            }
+        }
+    }, [])
 
     // Handlers
     const handlePeriodChange = (periodo: Periodo) => {
@@ -195,17 +234,20 @@ export function EtlPage() {
                 showToast(limparPastas ? "Pipeline iniciado (com limpeza)!" : "Pipeline iniciado!", "success")
                 if (result.job_id) {
                     localStorage.setItem('current_etl_job_id', String(result.job_id))
-                    // Opcional: Redirecionar para logs? Não, deixar o usuário escolher.
                 }
+                // Manter isExecuting=true - será setado false pelo handleJobComplete via WebSocket
             } else {
+                // API retornou erro - parar execução
+                setIsExecuting(false)
                 showToast("Erro: " + (result.message || result.error || "Falha desconhecida"), "error")
             }
         } catch (error) {
+            // Exceção na chamada API - parar execução
+            setIsExecuting(false)
             console.error("Execute error:", error)
             showToast("Erro ao executar: " + (error instanceof Error ? error.message : String(error)), "error")
-        } finally {
-            setIsExecuting(false)
         }
+        // Não usar finally - isExecuting deve permanecer true enquanto job roda
     }
 
     // Computed values

@@ -1,9 +1,42 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from typing import List
-import services.state as state_service
+import logging
 
-app = FastAPI(title="ETL Dashboard V2 Backend")
+import services.state as state_service
+from services.background_worker import get_worker
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+# Lifecycle manager para startup/shutdown
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Gerencia startup e shutdown do app"""
+    # Startup
+    import database
+    database.init_db()
+    logger.info("Database inicializado")
+
+    # Iniciar worker
+    worker = get_worker()
+    await worker.start()
+    logger.info("BackgroundWorker iniciado")
+
+    yield
+
+    # Shutdown
+    await worker.stop()
+    logger.info("BackgroundWorker parado")
+
+
+app = FastAPI(title="ETL Dashboard V2 Backend", lifespan=lifespan)
 
 # CORS Setup
 app.add_middleware(
@@ -26,15 +59,42 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def broadcast_log(self, log_entry: dict):
+        """Envia log para todos os clientes conectados"""
         message = {
             "type": "log",
             "payload": log_entry
         }
         await self._broadcast(message)
-    
+
+    async def broadcast_status(self, sistema_id: str, status: str, progresso: int = 0, mensagem: str = None):
+        """Envia status update de um sistema para todos os clientes"""
+        message = {
+            "type": "status",
+            "payload": {
+                "sistema_id": sistema_id,
+                "status": status,
+                "progresso": progresso,
+                "mensagem": mensagem
+            }
+        }
+        await self._broadcast(message)
+
+    async def broadcast_job_complete(self, job_id: int, status: str, duracao: int = 0):
+        """Envia notificacao de job completo"""
+        message = {
+            "type": "job_complete",
+            "payload": {
+                "job_id": job_id,
+                "status": status,
+                "duracao_segundos": duracao
+            }
+        }
+        await self._broadcast(message)
+
     async def _broadcast(self, message: dict):
         disconnect_list = []
         for connection in self.active_connections:
@@ -42,9 +102,14 @@ class ConnectionManager:
                 await connection.send_json(message)
             except:
                 disconnect_list.append(connection)
-        
+
         for conn in disconnect_list:
             self.disconnect(conn)
+
+    @property
+    def connection_count(self) -> int:
+        """Retorna numero de conexoes ativas"""
+        return len(self.active_connections)
 
 manager = ConnectionManager()
 # Register manager in shared state so other routers can use it
@@ -55,15 +120,14 @@ state_service.ws_manager = manager
 # -------------------------------------------------------------------------
 from routers.config import router as config_router
 from routers.execution import router as execution_router
+from routers.sistemas import router as sistemas_router
+from routers.credentials import router as credentials_router
 
 app.include_router(config_router)
 app.include_router(execution_router)
+app.include_router(sistemas_router)
+app.include_router(credentials_router)
 
-import database
-
-@app.on_event("startup")
-async def startup_event():
-    database.init_db()
 
 @app.get("/api/health")
 async def health_check():

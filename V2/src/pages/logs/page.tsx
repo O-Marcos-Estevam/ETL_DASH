@@ -1,78 +1,109 @@
-import { useEffect, useState, useMemo, useRef } from "react"
+import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { LogViewer } from "@/components/logs/log-viewer"
 import { LogFilter } from "@/components/logs/log-filter"
 import { api } from "@/services/api"
+import { ws, type WSLogEntry, type JobCompletePayload } from "@/services/websocket"
 import type { LogEntry } from "@/types/etl"
-import { Wifi, WifiOff, Loader2 } from "lucide-react"
+import { Wifi, WifiOff, RefreshCw } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+const MAX_LOGS = 1000; // Limit logs to prevent memory issues
 
 export function LogsPage() {
     const [logs, setLogs] = useState<LogEntry[]>([])
     const [isConnected, setIsConnected] = useState(false)
     const [isPaused, setIsPaused] = useState(false)
     const [filterText, setFilterText] = useState("")
-    const [jobId, setJobId] = useState<string | null>(null)
-    const [jobStatus, setJobStatus] = useState<string>("unknown")
+    const [jobId, setJobId] = useState<number | null>(null)
+    const [jobStatus, setJobStatus] = useState<string>("idle")
 
-    // Configura polling
+    // Ref para acessar isPaused atual sem causar re-subscribe
+    const isPausedRef = useRef(isPaused)
+    isPausedRef.current = isPaused
+
+    // Handle incoming log - estável, usa ref para isPaused
+    const handleLog = useCallback((log: WSLogEntry) => {
+        if (isPausedRef.current) return;
+
+        // Filter by job_id if we have one
+        const currentJobId = Number(localStorage.getItem('current_etl_job_id'));
+        if (currentJobId && log.job_id && log.job_id !== currentJobId) {
+            return; // Ignore logs from other jobs
+        }
+
+        setLogs(prev => {
+            const newLogs = [...prev, log];
+            // Keep only last MAX_LOGS entries
+            return newLogs.slice(-MAX_LOGS);
+        });
+    }, []); // Sem dependências - usa ref
+
+    // Handle job complete
+    const handleJobComplete = useCallback((payload: JobCompletePayload) => {
+        const currentJobId = Number(localStorage.getItem('current_etl_job_id'));
+        if (payload.job_id === currentJobId) {
+            setJobStatus(payload.status);
+            console.log(`[Logs] Job ${payload.job_id} completed: ${payload.status} (${payload.duracao_segundos}s)`);
+        }
+    }, []);
+
+    // Load initial job status on mount
     useEffect(() => {
-        // Recuperar ID do job
-        const storedJobId = localStorage.getItem('current_etl_job_id')
+        const storedJobId = localStorage.getItem('current_etl_job_id');
         if (storedJobId) {
-            setJobId(storedJobId)
-            setIsConnected(true)
+            setJobId(Number(storedJobId));
+            // Fetch initial job status
+            api.getJobStatus(Number(storedJobId))
+                .then(job => {
+                    setJobStatus(job.status);
+                    // Load existing logs if any
+                    if (job.logs) {
+                        const lines = job.logs.split('\n').filter((l: string) => l.trim());
+                        const parsedLogs: LogEntry[] = lines.map((line: string) => {
+                            let level: LogEntry['level'] = 'INFO';
+                            if (line.includes('[ERROR]')) level = 'ERROR';
+                            else if (line.includes('[WARN]')) level = 'WARN';
+                            else if (line.includes('[SUCCESS]')) level = 'SUCCESS';
+
+                            return {
+                                timestamp: new Date().toISOString(),
+                                level,
+                                sistema: 'HISTORY',
+                                mensagem: line
+                            };
+                        });
+                        setLogs(parsedLogs);
+                    }
+                })
+                .catch(err => console.warn('Failed to fetch job status:', err));
         }
+    }, []); // Apenas no mount
 
-        if (!storedJobId) return
-
-        const pollLogs = async () => {
-            if (isPaused) return
-
+    // Connect to WebSocket and subscribe to events
+    useEffect(() => {
+        const connectWS = async () => {
             try {
-                const job = await api.getJobStatus(Number(storedJobId))
-                setJobStatus(job.status)
-
-                if (job.logs) {
-                    // Parse logs from text blob
-                    const lines = job.logs.split('\n')
-                    const parsedLogs: LogEntry[] = lines.map((line: string, index: number) => {
-                        if (!line.trim()) return null
-
-                        // Tentar extrair level e timestamp se possível, ou usar defaults
-                        let level = 'INFO'
-                        if (line.includes('ERROR') || line.includes('Erro')) level = 'ERROR'
-                        if (line.includes('WARN')) level = 'WARN'
-                        if (line.includes('SUCCESS')) level = 'SUCCESS'
-
-                        return {
-                            id: `${job.id}-${index}`,
-                            timestamp: new Date().toLocaleTimeString(), // Fallback
-                            level: level as any,
-                            sistema: 'ETL',
-                            mensagem: line
-                        }
-                    }).filter(Boolean) as LogEntry[]
-
-                    setLogs(parsedLogs)
-                }
-
-                if (job.status === 'completed' || job.status === 'error') {
-                    // Stop polling eventually? No, user might want to see final state.
-                    // Maybe reduce frequency.
-                }
-
-                setIsConnected(true)
+                ws.resetReconnect();
+                await ws.connect();
             } catch (error) {
-                console.error("Polling error:", error)
-                setIsConnected(false)
+                console.warn('WebSocket connection failed:', error);
             }
-        }
+        };
 
-        // Poll every 2 seconds
-        const intervalId = setInterval(pollLogs, 2000)
-        pollLogs() // Initial call
+        connectWS();
 
-        return () => clearInterval(intervalId)
-    }, [isPaused, jobId])
+        // Subscribe to events
+        const unsubLog = ws.onLog(handleLog);
+        const unsubJobComplete = ws.onJobComplete(handleJobComplete);
+        const unsubConnection = ws.onConnectionChange(setIsConnected);
+
+        return () => {
+            unsubLog();
+            unsubJobComplete();
+            unsubConnection();
+            ws.disconnect();
+        };
+    }, [handleLog, handleJobComplete])
 
     const [levels, setLevels] = useState<Record<string, boolean>>({
         INFO: true,
@@ -112,25 +143,57 @@ export function LogsPage() {
         setLevels(prev => ({ ...prev, [level]: !prev[level] }))
     }
 
+    const handleReconnect = async () => {
+        try {
+            ws.resetReconnect();
+            await ws.connect();
+        } catch (error) {
+            console.warn('Reconnect failed:', error);
+        }
+    };
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'running': return 'text-blue-500 bg-blue-500/10';
+            case 'completed': return 'text-green-500 bg-green-500/10';
+            case 'error': return 'text-red-500 bg-red-500/10';
+            default: return 'text-muted-foreground bg-muted/10';
+        }
+    };
+
     return (
         <div className="flex flex-col gap-4 h-[calc(100vh-6rem)]">
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">System Logs</h2>
                     <p className="text-muted-foreground">
-                        Job ID: {jobId || 'None'} | Status: <span className="font-mono font-bold uppercase">{jobStatus}</span>
+                        Job ID: {jobId || 'None'} | Status:{' '}
+                        <span className={`font-mono font-bold uppercase px-2 py-0.5 rounded ${getStatusColor(jobStatus)}`}>
+                            {jobStatus}
+                        </span>
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
                     {isConnected ? (
                         <div className="flex items-center text-green-500 bg-green-500/10 px-3 py-1 rounded-full text-xs font-medium">
                             <Wifi className="w-3 h-3 mr-2" />
-                            Live (Polling)
+                            Live (WebSocket)
                         </div>
                     ) : (
-                        <div className="flex items-center text-red-500 bg-red-500/10 px-3 py-1 rounded-full text-xs font-medium">
-                            <WifiOff className="w-3 h-3 mr-2" />
-                            Disconnected
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center text-red-500 bg-red-500/10 px-3 py-1 rounded-full text-xs font-medium">
+                                <WifiOff className="w-3 h-3 mr-2" />
+                                Disconnected
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleReconnect}
+                                className="h-7"
+                            >
+                                <RefreshCw className="w-3 h-3 mr-1" />
+                                Reconnect
+                            </Button>
                         </div>
                     )}
                 </div>
