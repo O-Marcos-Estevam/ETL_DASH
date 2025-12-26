@@ -107,9 +107,32 @@ def main():
     parser.add_argument('--data-final', help='Data final (DD/MM/YYYY)')
     parser.add_argument('--limpar', action='store_true', help='Limpar pastas antes de executar')
     parser.add_argument('--dry-run', action='store_true', help='Apenas mostrar o que seria executado')
-    parser.add_argument('--csv', action='store_true', default=True, help='Baixar CSV (AMPLIS)')
+    parser.add_argument('--no-csv', action='store_false', dest='csv', help='Não baixar CSV (AMPLIS)')
+    parser.set_defaults(csv=True)
 
-    parser.add_argument('--pdf', action='store_true', default=True, help='Baixar PDF (AMPLIS)')
+    parser.add_argument('--no-pdf', action='store_false', dest='pdf', help='Não baixar PDF (AMPLIS)')
+    parser.set_defaults(pdf=True)
+
+    # MAPS Options
+    parser.add_argument('--maps-no-excel', action='store_false', dest='maps_excel', help='Não baixar Excel (MAPS)')
+    parser.set_defaults(maps_excel=True)
+    parser.add_argument('--maps-no-pdf', action='store_false', dest='maps_pdf', help='Não baixar PDF (MAPS)')
+    parser.set_defaults(maps_pdf=True)
+    parser.add_argument('--maps-no-ativo', action='store_false', dest='maps_ativo', help='Não processar Ativo (MAPS)')
+    parser.set_defaults(maps_ativo=True)
+    parser.add_argument('--maps-no-passivo', action='store_false', dest='maps_passivo', help='Não processar Passivo (MAPS)')
+    parser.set_defaults(maps_passivo=True)
+
+    # QORE Options
+    parser.add_argument('--qore-no-excel', action='store_false', dest='qore_excel', help='Não baixar Excel (QORE)')
+    parser.set_defaults(qore_excel=True)
+    parser.add_argument('--qore-no-pdf', action='store_false', dest='qore_pdf', help='Não baixar PDF (QORE)')
+    parser.set_defaults(qore_pdf=True)
+    parser.add_argument('--qore-lote-pdf', action='store_true', dest='qore_lote_pdf', help='Usar modo lote PDF (QORE)')
+    parser.set_defaults(qore_lote_pdf=False)
+    parser.add_argument('--qore-lote-excel', action='store_true', dest='qore_lote_excel', help='Usar modo lote Excel (QORE)')
+    parser.set_defaults(qore_lote_excel=False)
+
     parser.add_argument('--fidc-fundos', help='JSON lista de fundos FIDC')
     parser.add_argument('--maps-fundos', help='JSON lista de fundos MAPS')
     parser.add_argument('--qore-fundos', help='JSON lista de fundos QORE')
@@ -188,7 +211,7 @@ def main():
                         creds["password"],
                         args.data_inicial,
                         args.data_final,
-                        True, True, True, True, fundos
+                        args.maps_excel, args.maps_pdf, args.maps_ativo, args.maps_passivo, fundos
                     )
                     log("SUCCESS", "MAPS", "Execução concluída com sucesso")
                     sucesso += 1
@@ -275,6 +298,10 @@ def main():
                         fundos = creds.get("fundos_selecionados", [])
 
                     # QORE tem muitos parâmetros - usando valores padrão
+                    # Parse dates for QORE
+                    dt_inicial = datetime.strptime(args.data_inicial, "%d/%m/%Y")
+                    dt_final = datetime.strptime(args.data_final, "%d/%m/%Y") if args.data_final else dt_inicial
+
                     run_qore(
                         paths.get("bd_xlsx", ""),  # bd_path
                         paths.get("pdf", ""),         # pdf_path
@@ -285,19 +312,21 @@ def main():
                         creds["username"],
                         None,                          # df
                         True,                          # QORE_enabled
-                        True,                          # PDF_enabled
-                        False,                         # modo_lote_pdf
-                        True,                          # Excel_enabled
-                        False,                         # modo_lote_excel
-                        None,                          # data_inicial
-                        None,                          # data_final
+                        args.qore_pdf,                 # PDF_enabled
+                        args.qore_lote_pdf,            # modo_lote_pdf
+                        args.qore_excel,               # Excel_enabled
+                        args.qore_lote_excel,          # modo_lote_excel
+                        dt_inicial,                    # data_inicial
+                        dt_final,                      # data_final
                         paths.get("selenium_temp", ""), # SELENIUM_DOWNLOAD_TEMP_PATH
                         fundos                         # fundos_selecionados
                     )
                     log("SUCCESS", "QORE", "Execução concluída com sucesso")
                     sucesso += 1
                 except Exception as e:
+                    import traceback
                     log("ERROR", "QORE", f"Erro: {str(e)}")
+                    log("ERROR", "QORE", f"Traceback: {traceback.format_exc()}")
                     erros += 1
             elif sistema == 'trustee':
                 log("INFO", "TRUSTEE", "Iniciando execução")

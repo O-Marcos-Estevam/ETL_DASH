@@ -44,3 +44,6 @@ scripts/node_temp/
 
 # Security / Local Config
 config/credentials.json
+
+# Shortcuts
+*.lnk
