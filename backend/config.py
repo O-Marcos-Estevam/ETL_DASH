@@ -10,7 +10,7 @@ class Settings:
 
     # Paths
     BACKEND_DIR = Path(__file__).parent
-    ROOT_DIR = BACKEND_DIR.parent.parent  # DEV_ETL/
+    ROOT_DIR = BACKEND_DIR.parent  # DEV_ETL/
     PYTHON_DIR = ROOT_DIR / "python"
     CONFIG_DIR = ROOT_DIR / "config"
 

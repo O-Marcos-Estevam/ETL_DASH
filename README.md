@@ -1,140 +1,111 @@
-# ETL Dashboard V2
+# ETL Dashboard
 
-Sistema de gerenciamento de downloads ETL desenvolvido com TypeScript e Java Spring Boot.
+Sistema de gerenciamento e execução de pipelines ETL.
 
-## Tecnologias
+## Stack
 
-### Backend
-- **Java 17**
-- **Spring Boot 3.2**
-- **WebSocket (STOMP)**
-- **Selenium WebDriver**
-- **Apache POI**
-- **Lombok**
+- **Backend:** Python FastAPI + SQLite
+- **Frontend:** React + TypeScript + Vite + shadcn/ui
+- **WebSocket:** Comunicação em tempo real
 
-### Frontend
-- **TypeScript 5.3**
-- **Vite**
-- **SockJS + STOMP**
-- **CSS3 com variaveis**
-
-## Estrutura do Projeto
+## Estrutura
 
 ```
 DEV_ETL/
-├── backend/                    # API Java Spring Boot
-│   ├── src/main/java/com/etl/
-│   │   ├── config/            # Configuracoes (CORS, WebSocket)
-│   │   ├── controller/        # REST Controllers
-│   │   ├── model/             # Modelos de dados
-│   │   ├── service/           # Logica de negocio
-│   │   └── automation/        # Selenium automations
-│   ├── src/main/resources/
-│   │   └── application.yml    # Configuracoes
-│   └── pom.xml                # Dependencias Maven
+├── backend/           # API FastAPI
+│   ├── app.py         # Entry point
+│   ├── config.py      # Configurações
+│   ├── core/          # Database, exceptions, logging
+│   ├── models/        # Pydantic models
+│   ├── routers/       # Endpoints API
+│   └── services/      # Lógica de negócio
 │
-├── frontend/                   # Interface TypeScript
-│   ├── src/
-│   │   ├── components/        # Componentes UI
-│   │   ├── services/          # API e WebSocket
-│   │   ├── types/             # TypeScript types
-│   │   └── styles/            # CSS
-│   ├── index.html
+├── frontend/          # React App
+│   ├── src/           # Código fonte
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── pages/
+│   │   └── services/
 │   ├── package.json
-│   └── tsconfig.json
+│   └── vite.config.ts
 │
-└── scripts/                    # Scripts de build/run
-    ├── build.bat
-    ├── run-backend.bat
-    ├── run-frontend.bat
-    └── run-dev.bat
+├── config/            # Configurações globais
+├── docs/              # Documentação
+├── tools/             # Runtimes (java, maven, node)
+├── python/            # Scripts ETL
+├── scripts/           # Scripts auxiliares
+│
+└── INICIAR.bat        # Launcher
 ```
 
-## Pre-requisitos
+## Como Iniciar
 
-- **Java JDK 17+**
-- **Maven 3.8+**
-- **Node.js 18+**
-- **npm 9+**
-
-## Instalacao
-
-1. **Build completo:**
-   ```bash
-   cd scripts
-   build.bat
-   ```
-
-2. **Instalar dependencias separadamente:**
-   ```bash
-   # Backend
-   cd backend
-   mvn clean install
-
-   # Frontend
-   cd frontend
-   npm install
-   ```
-
-## Execucao
-
-### Modo Desenvolvimento (recomendado)
-```bash
-cd scripts
-run-dev.bat
+### Opção 1: Launcher
+```batch
+INICIAR.bat
 ```
-Isso inicia backend e frontend simultaneamente.
 
-### Separadamente
-```bash
+### Opção 2: Manual
+```batch
 # Terminal 1 - Backend
-cd scripts
-run-backend.bat
+cd backend
+python app.py
 
 # Terminal 2 - Frontend
-cd scripts
-run-frontend.bat
+cd frontend
+npm run dev
 ```
 
 ## URLs
 
-- **Frontend:** http://localhost:5173
-- **Backend API:** http://localhost:8080
-- **WebSocket:** ws://localhost:8080/ws
+| Serviço | URL |
+|---------|-----|
+| Frontend | http://localhost:4000 |
+| Backend API | http://localhost:4001 |
+| API Docs | http://localhost:4001/docs |
+| WebSocket | ws://localhost:4001/ws |
 
-## API Endpoints
+## Endpoints API
 
-| Metodo | Endpoint | Descricao |
+| Método | Endpoint | Descrição |
 |--------|----------|-----------|
-| GET | /api/config | Obter configuracao |
-| POST | /api/config | Salvar configuracao |
-| GET | /api/sistemas | Listar sistemas |
-| GET | /api/sistemas/ativos | Listar sistemas ativos |
-| PATCH | /api/sistemas/{id}/toggle | Ativar/desativar sistema |
-| PATCH | /api/sistemas/{id}/opcao | Atualizar opcao |
-| POST | /api/execute | Executar pipeline |
-| POST | /api/execute/{id} | Executar sistema especifico |
-| POST | /api/cancel/{id} | Cancelar execucao |
 | GET | /api/health | Health check |
+| GET | /api/sistemas | Lista sistemas |
+| GET | /api/config | Configuração atual |
+| POST | /api/execute | Executar pipeline |
+| POST | /api/cancel/{id} | Cancelar job |
+| GET | /api/jobs | Listar jobs |
+| GET | /api/credentials | Credenciais |
+| POST | /api/credentials | Salvar credenciais |
 
-## WebSocket Topics
+## WebSocket
 
-| Topic | Descricao |
-|-------|-----------|
-| /topic/logs | Logs em tempo real |
-| /topic/status/{id} | Status de execucao por sistema |
+Conecte em `ws://localhost:4001/ws` para receber:
+- `log`: Logs em tempo real
+- `status`: Status dos sistemas
+- `job_complete`: Notificação de conclusão
 
-## Sistemas Suportados
+## Desenvolvimento
 
-1. **AMPLIS REAG** - Download CSV/PDF
-2. **AMPLIS MASTER** - Download CSV/PDF
-3. **MAPS** - Download consolidado
-4. **FIDC ESTOQUE** - Estoque FIDC
-5. **JCOT** - Cotacoes
-6. **BRITECH** - Base de dados
-7. **QORE** - PDF/Excel/XML
-8. **TRUSTEE** - Em desenvolvimento
+```bash
+# Frontend
+cd frontend
+npm install
+npm run dev
 
-## Autor
+# Build produção
+npm run build
+```
 
-NS Capital - 2024
+## Configuração
+
+Credenciais em: `config/credentials.json`
+
+Variáveis de ambiente (`.env`):
+```env
+ETL_HOST=0.0.0.0
+ETL_PORT=4001
+ETL_DEBUG=false
+VITE_API_URL=http://localhost:4001/api
+VITE_WS_URL=ws://localhost:4001
+```

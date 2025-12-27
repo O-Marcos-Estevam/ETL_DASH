@@ -1,6 +1,0 @@
-﻿
-> etl-dashboard-v2@0.0.0 build
-> tsc -b && vite build
-
-src/components/logs/log-viewer.tsx(31,15): error TS6133: 'viewport' is declared but its value is never read.
-src/components/settings/credentials-form.tsx(41,31): error TS6133: 'sistema' is declared but its value is never read.

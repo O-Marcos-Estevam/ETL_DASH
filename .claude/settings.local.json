@@ -13,7 +13,10 @@
       "Bash(git push:*)",
       "Bash(dir:*)",
       "Bash(cmd /c \"cd /d \"\"c:\\\\bloko\\\\Fundos - Documentos\\\\00. Monitoramento\\\\01. Rotinas\\\\03. Arquivos Rotina\\\\DEV_ETL\"\" && dir /s /b /a\")",
-      "Bash(find . -maxdepth 1 -type d -exec sh -c 'count=$\\(find \"\"$1\"\" -type f 2>/dev/null | wc -l\\); echo \"\"$1: $count files\"\"' _ {} ;)"
+      "Bash(find . -maxdepth 1 -type d -exec sh -c 'count=$\\(find \"\"$1\"\" -type f 2>/dev/null | wc -l\\); echo \"\"$1: $count files\"\"' _ {} ;)",
+      "Bash(git commit:*)",
+      "Bash(cd:*)",
+      "Bash(xcopy:*)"
     ]
   }
 }
