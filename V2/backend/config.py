@@ -30,9 +30,11 @@ class Settings:
     POLL_INTERVAL = float(os.getenv("ETL_POLL_INTERVAL", "2.0"))  # segundos
 
     # Database
-    DB_PATH = BACKEND_DIR / "tasks.db"
+    DATA_DIR = BACKEND_DIR / "data"
+    DB_PATH = DATA_DIR / "tasks.db"
 
     # Logging
+    LOG_DIR = BACKEND_DIR / "logs"
     LOG_LEVEL = os.getenv("ETL_LOG_LEVEL", "INFO")
     LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 

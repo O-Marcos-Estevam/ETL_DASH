@@ -11,9 +11,9 @@ import os
 # Adicionar path para imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import database
-from services.sistema_service import get_sistema_service
-from services.background_worker import get_worker
+from core import database
+from services.sistemas import get_sistema_service
+from services.worker import get_worker
 from models.sistema import SistemaStatus
 
 logger = logging.getLogger("uvicorn.error")

@@ -5,7 +5,7 @@ from typing import List
 import logging
 
 import services.state as state_service
-from services.background_worker import get_worker
+from services.worker import get_worker
 from config import settings
 
 # Configurar logging
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(_app: FastAPI):
     """Gerencia startup e shutdown do app"""
     # Startup
-    import database
+    from core import database
     database.init_db()
     logger.info("Database inicializado")
 

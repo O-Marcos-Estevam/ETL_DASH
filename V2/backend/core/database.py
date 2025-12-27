@@ -1,9 +1,13 @@
+"""
+Database module - SQLite operations for job queue
+"""
 import sqlite3
 import json
 from datetime import datetime
-import os
+from pathlib import Path
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "tasks.db")
+# Caminho para o banco na pasta data/
+DB_PATH = Path(__file__).parent.parent / "data" / "tasks.db"
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)

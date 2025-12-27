@@ -13,8 +13,8 @@ _backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
-from services.sistema_service import get_sistema_service
-from services.config_service import get_config_service
+from services.sistemas import get_sistema_service
+from services.credentials import get_config_service
 
 router = APIRouter(tags=["config"])
 

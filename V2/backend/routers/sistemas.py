@@ -9,7 +9,7 @@ import os
 # Adicionar path para imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.sistema_service import get_sistema_service
+from services.sistemas import get_sistema_service
 from models.sistema import Sistema
 
 router = APIRouter(prefix="/api/sistemas", tags=["sistemas"])

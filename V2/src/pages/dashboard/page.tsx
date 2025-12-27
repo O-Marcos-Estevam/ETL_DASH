@@ -13,7 +13,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ExecutionService } from "@/services/execution"
+import { executePipeline } from "@/services/api"
 import { useToast } from "@/components/ui/use-toast"
 import { useNavigate } from "react-router-dom"
 
@@ -37,9 +37,10 @@ export function DashboardPage() {
                 description: `Disparando ${sistema ? sistema.toUpperCase() : "TODOS"}...`,
             })
 
-            const res = await ExecutionService.runJob({
+            const res = await executePipeline({
                 sistemas,
-                dry_run: false
+                limpar: false,
+                opcoes: {}
             })
 
             if (res.status === "started") {

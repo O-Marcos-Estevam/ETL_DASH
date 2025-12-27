@@ -9,7 +9,7 @@ import os
 # Adicionar path para imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.config_service import get_config_service
+from services.credentials import get_config_service
 
 router = APIRouter(prefix="/api", tags=["credentials"])
 

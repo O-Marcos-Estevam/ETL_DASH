@@ -15,9 +15,9 @@ _backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend_dir not in sys.path:
     sys.path.insert(0, _backend_dir)
 
-import database
+from core import database
 from services.executor import get_executor
-from services.sistema_service import get_sistema_service
+from services.sistemas import get_sistema_service
 from models.sistema import SistemaStatus
 import services.state as state_service
 
