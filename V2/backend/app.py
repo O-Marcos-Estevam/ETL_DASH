@@ -6,11 +6,12 @@ import logging
 
 import services.state as state_service
 from services.background_worker import get_worker
+from config import settings
 
 # Configurar logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=getattr(logging, settings.LOG_LEVEL),
+    format=settings.LOG_FORMAT
 )
 logger = logging.getLogger(__name__)
 
@@ -38,10 +39,10 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="ETL Dashboard V2 Backend", lifespan=lifespan)
 
-# CORS Setup
+# CORS Setup - Usa origens configuradas (padrao: localhost:4000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -144,4 +145,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=4001, reload=True)
+    uvicorn.run(
+        "app:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG  # Apenas em desenvolvimento
+    )

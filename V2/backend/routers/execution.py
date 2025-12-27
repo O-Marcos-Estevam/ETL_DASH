@@ -20,10 +20,6 @@ logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter(tags=["execution"])
 
-# Armazenar job em execucao para permitir cancelamento
-_current_job_id: Optional[int] = None
-_cancel_requested: bool = False
-
 
 class ExecuteRequest(BaseModel):
     """Request para executar pipeline"""
@@ -57,8 +53,6 @@ async def execute_pipeline(request: ExecuteRequest):
     Returns:
         Status e job_id do job enfileirado
     """
-    global _current_job_id, _cancel_requested
-
     try:
         # Validar que pelo menos um sistema foi selecionado
         if not request.sistemas:
@@ -76,12 +70,8 @@ async def execute_pipeline(request: ExecuteRequest):
                 "job_id": running_job["id"]
             }
 
-        # Resetar flag de cancelamento
-        _cancel_requested = False
-
         # Criar job no banco
         job_id = database.add_job("etl_pipeline", request.model_dump())
-        _current_job_id = job_id
 
         logger.info(f"Pipeline enfileirado: job_id={job_id}, sistemas={request.sistemas}")
 
@@ -115,8 +105,6 @@ async def execute_single_system(sistema_id: str, request: ExecuteSingleRequest):
     Returns:
         Status e job_id do job enfileirado
     """
-    global _current_job_id, _cancel_requested
-
     try:
         # Verificar se sistema existe
         service = get_sistema_service()
@@ -137,9 +125,6 @@ async def execute_single_system(sistema_id: str, request: ExecuteSingleRequest):
                 "job_id": running_job["id"]
             }
 
-        # Resetar flag de cancelamento
-        _cancel_requested = False
-
         # Criar parametros do job
         params = {
             "sistemas": [sistema_id],
@@ -152,7 +137,6 @@ async def execute_single_system(sistema_id: str, request: ExecuteSingleRequest):
 
         # Criar job no banco
         job_id = database.add_job("etl_single", params)
-        _current_job_id = job_id
 
         logger.info(f"Sistema enfileirado: job_id={job_id}, sistema={sistema_id}")
 
@@ -183,8 +167,6 @@ async def cancel_execution(job_id: int):
     Returns:
         Status da operacao
     """
-    global _cancel_requested
-
     try:
         # Buscar job
         job = database.get_job(job_id)
@@ -201,9 +183,6 @@ async def cancel_execution(job_id: int):
                 "status": "error",
                 "message": f"Job {job_id} nao pode ser cancelado (status: {job['status']})"
             }
-
-        # Marcar cancelamento
-        _cancel_requested = True
 
         # Cancelar processo em execucao via worker
         worker = get_worker()
@@ -281,22 +260,3 @@ async def get_job_status(job_id: int):
         )
 
     return job
-
-
-# ==================== HELPERS ====================
-
-def is_cancel_requested() -> bool:
-    """Verifica se foi solicitado cancelamento"""
-    return _cancel_requested
-
-
-def get_current_job_id() -> Optional[int]:
-    """Retorna ID do job atual em execucao"""
-    return _current_job_id
-
-
-def clear_current_job():
-    """Limpa referencia ao job atual"""
-    global _current_job_id, _cancel_requested
-    _current_job_id = None
-    _cancel_requested = False

@@ -87,6 +87,23 @@ Estrutura:
 - `[sistema].usar_todos`: Se true, processa todos os fundos
 - `[sistema].fundos_selecionados`: Fundos selecionados manualmente
 
+## Variaveis de Ambiente
+
+Copie `.env.example` para `.env` e configure:
+
+```env
+# Backend
+ETL_HOST=0.0.0.0
+ETL_PORT=4001
+ETL_DEBUG=false              # true para reload automatico
+ETL_LOG_LEVEL=INFO
+ETL_CORS_ORIGINS=http://localhost:4000
+
+# Frontend (Vite)
+VITE_API_URL=http://localhost:4001/api
+VITE_WS_URL=ws://localhost:4001
+```
+
 ## Desenvolvimento
 
 ```bash
@@ -100,3 +117,33 @@ npm run typecheck
 # Build producao
 npm run build
 ```
+
+## Arquitetura
+
+```
+V2/
+├── backend/
+│   ├── app.py              # Entry point FastAPI
+│   ├── config.py           # Configuracoes centralizadas
+│   ├── database.py         # SQLite
+│   ├── core/               # Utilities (exceptions, logging)
+│   ├── routers/            # Endpoints API
+│   ├── services/           # Logica de negocio
+│   └── models/             # Pydantic models
+├── src/
+│   ├── pages/              # Paginas React
+│   ├── components/         # UI Components
+│   ├── hooks/              # Custom hooks
+│   ├── services/           # API/WebSocket
+│   ├── lib/                # Utilities + constants
+│   └── types/              # TypeScript types
+├── scripts/                # Scripts de inicializacao
+└── .env.example            # Template de configuracao
+```
+
+## Seguranca
+
+- CORS restrito a origens configuradas (nao usa `["*"]`)
+- Reload desabilitado em producao (ETL_DEBUG=false)
+- Senhas mascaradas na API
+- Credenciais em arquivo separado (nao versionado)
