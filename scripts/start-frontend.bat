@@ -1,23 +1,46 @@
 @echo off
 chcp 65001 >nul
-title ETL Frontend - Porta 4000
+title ETL Frontend - React
 
 pushd "%~dp0.."
 set "ROOT_DIR=%CD%"
 popd
 
-:: Mata processos node existentes na porta 4000
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":4000" ^| findstr "LISTENING"') do (
-    taskkill /F /PID %%a >nul 2>&1
-)
+echo ========================================
+echo   ETL Dashboard V2 - Frontend
+echo ========================================
+echo.
 
-set "NODE_HOME=%ROOT_DIR%\node"
-if exist "%NODE_HOME%" (
-    set "PATH=%NODE_HOME%;%PATH%"
+REM Verificar Node.js
+node --version >nul 2>&1
+if errorlevel 1 (
+    echo [ERRO] Node.js nao encontrado!
+    echo Por favor, instale Node.js 18 ou superior.
+    pause
+    exit /b 1
 )
 
 cd /d "%ROOT_DIR%\frontend"
-echo Iniciando Frontend na porta 4000...
-echo Digite 'h' + Enter para ver comandos de ajuda do Vite.
-call "%NODE_HOME%\npm.cmd" run dev
-pause
+
+REM Verificar se node_modules existe
+if not exist "node_modules" (
+    echo [INFO] Instalando dependencias...
+    call npm install
+    if errorlevel 1 (
+        echo [ERRO] Falha ao instalar dependencias!
+        pause
+        exit /b 1
+    )
+)
+
+echo.
+echo Iniciando Frontend React na porta 4000...
+echo.
+
+call npm run dev
+
+if errorlevel 1 (
+    echo.
+    echo [ERRO] Frontend falhou ao iniciar!
+    pause
+)

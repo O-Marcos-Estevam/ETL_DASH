@@ -10,6 +10,9 @@ from pathlib import Path
 DB_PATH = Path(__file__).parent.parent / "data" / "tasks.db"
 
 def init_db():
+    # Garantir que o diretorio data/ existe
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     

@@ -8,6 +8,7 @@ import re
 import logging
 from datetime import datetime
 from typing import Callable, Optional, List, Dict, Any
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,49 @@ class ETLExecutor:
         self._cancelled = False
 
         # Caminhos relativos ao backend
+        # __file__ -> services/executor.py
+        # Subir 2 niveis: services -> backend -> DEV_ETL (root)
         self.root_dir = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..")
+            os.path.join(os.path.dirname(__file__), "..", "..")
         )
         self.python_dir = os.path.join(self.root_dir, "python")
         self.main_script = os.path.join(self.python_dir, "main.py")
         self.config_path = os.path.join(self.root_dir, "config", "credentials.json")
 
         logger.info(f"ETLExecutor initialized: root={self.root_dir}")
+
+    def _convert_date_format(self, date_str: str) -> str:
+        """
+        Converte data de formato ISO (YYYY-MM-DD) para DD/MM/YYYY
+        ou mantém o formato se já estiver no formato correto
+        """
+        if not date_str:
+            return date_str
+        
+        # Tentar parsear formato ISO
+        try:
+            # Formato ISO: YYYY-MM-DD
+            if len(date_str) == 10 and date_str[4] == '-' and date_str[7] == '-':
+                dt = datetime.strptime(date_str, "%Y-%m-%d")
+                return dt.strftime("%d/%m/%Y")
+        except ValueError:
+            pass
+        
+        # Se já estiver no formato DD/MM/YYYY, retornar como está
+        # ou se for outro formato, tentar converter
+        try:
+            # Tentar vários formatos comuns
+            for fmt in ["%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"]:
+                try:
+                    dt = datetime.strptime(date_str, fmt)
+                    return dt.strftime("%d/%m/%Y")
+                except ValueError:
+                    continue
+        except Exception:
+            pass
+        
+        # Se não conseguir converter, retornar original e deixar main.py tratar
+        return date_str
 
     def build_command(self, params: Dict[str, Any]) -> List[str]:
         """
@@ -51,11 +87,13 @@ class ETLExecutor:
         if sistemas:
             cmd.extend(["--sistemas"] + sistemas)
 
-        # Datas
+        # Datas - converter para formato DD/MM/YYYY
         if params.get("data_inicial"):
-            cmd.extend(["--data-inicial", params["data_inicial"]])
+            data_inicial = self._convert_date_format(params["data_inicial"])
+            cmd.extend(["--data-inicial", data_inicial])
         if params.get("data_final"):
-            cmd.extend(["--data-final", params["data_final"]])
+            data_final = self._convert_date_format(params["data_final"])
+            cmd.extend(["--data-final", data_final])
 
         # Config path
         cmd.extend(["--config", self.config_path])
@@ -137,16 +175,30 @@ class ETLExecutor:
         env["PYTHONUNBUFFERED"] = "1"
 
         try:
-            # Criar processo
-            self.process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=self.python_dir,
-                env=env
-            )
+            # Verificar se o script existe
+            if not os.path.exists(self.main_script):
+                error_msg = f"Script nao encontrado: {self.main_script}"
+                logger.error(error_msg)
+                await self._send_log(log_callback, "ERROR", "SISTEMA", error_msg)
+                return False
 
-            # Ler output com timeout
+            # Criar processo
+            try:
+                self.process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,  # Capturar stderr separadamente
+                    cwd=self.python_dir,
+                    env=env
+                )
+            except Exception as e:
+                error_msg = f"Erro ao criar processo: {str(e)}\nTraceback: {traceback.format_exc()}"
+                logger.error(error_msg)
+                await self._send_log(log_callback, "ERROR", "SISTEMA", 
+                                     f"Erro ao iniciar processo: {str(e)}")
+                return False
+
+            # Ler output e stderr com timeout
             try:
                 await asyncio.wait_for(
                     self._stream_output(log_callback),
@@ -161,6 +213,18 @@ class ETLExecutor:
             # Aguardar finalizacao
             await self.process.wait()
             return_code = self.process.returncode
+
+            # Ler stderr se houver
+            if self.process.stderr:
+                try:
+                    stderr_data = await self.process.stderr.read()
+                    if stderr_data:
+                        stderr_text = stderr_data.decode("utf-8", errors="replace").strip()
+                        if stderr_text:
+                            await self._send_log(log_callback, "ERROR", "SISTEMA",
+                                                 f"Stderr: {stderr_text}")
+                except Exception:
+                    pass
 
             # Log final
             if self._cancelled:
@@ -177,7 +241,8 @@ class ETLExecutor:
                 return False
 
         except Exception as e:
-            logger.error(f"Erro na execucao: {e}")
+            error_msg = f"Erro na execucao: {str(e)}\nTraceback: {traceback.format_exc()}"
+            logger.error(error_msg)
             await self._send_log(log_callback, "ERROR", "SISTEMA",
                                  f"Erro na execucao: {str(e)}")
             return False
@@ -186,18 +251,55 @@ class ETLExecutor:
 
     async def _stream_output(self, log_callback: Callable):
         """Processa output do processo linha a linha"""
-        while True:
-            if self._cancelled:
-                break
-
-            line = await self.process.stdout.readline()
-            if not line:
-                break
-
-            decoded = line.decode("utf-8", errors="replace").strip()
-            if decoded:
-                parsed = self._parse_log_line(decoded)
-                await self._send_log_dict(log_callback, parsed)
+        # Ler stdout e stderr simultaneamente
+        tasks = []
+        
+        # Task para stdout
+        async def read_stdout():
+            if not self.process.stdout:
+                return
+            while True:
+                if self._cancelled:
+                    break
+                try:
+                    line = await self.process.stdout.readline()
+                    if not line:
+                        break
+                    decoded = line.decode("utf-8", errors="replace").strip()
+                    if decoded:
+                        parsed = self._parse_log_line(decoded)
+                        await self._send_log_dict(log_callback, parsed)
+                except Exception as e:
+                    logger.error(f"Erro ao ler stdout: {e}")
+                    break
+        
+        # Task para stderr
+        async def read_stderr():
+            if not self.process.stderr:
+                return
+            while True:
+                if self._cancelled:
+                    break
+                try:
+                    line = await self.process.stderr.readline()
+                    if not line:
+                        break
+                    decoded = line.decode("utf-8", errors="replace").strip()
+                    if decoded:
+                        # Log de stderr como erro
+                        await self._send_log(log_callback, "ERROR", "STDERR", decoded)
+                except Exception as e:
+                    logger.error(f"Erro ao ler stderr: {e}")
+                    break
+        
+        # Executar ambas as tasks
+        if self.process.stdout:
+            tasks.append(asyncio.create_task(read_stdout()))
+        if self.process.stderr:
+            tasks.append(asyncio.create_task(read_stderr()))
+        
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _send_log(self, callback: Callable, level: str, sistema: str, mensagem: str):
         """Envia log formatado"""

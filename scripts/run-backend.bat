@@ -1,18 +1,15 @@
 @echo off
-echo ============================================================
-echo   ETL Dashboard V2 - Backend Java (DEV MODE)
-echo ============================================================
-echo.
+REM Script simplificado para desenvolvimento
+chcp 65001 >nul
+title ETL Backend - Dev Mode
 
 pushd "%~dp0.."
-set "ROOT_DIR=%CD%"
-popd
+cd backend
 
-set "JAVA_HOME=%ROOT_DIR%\java\jdk-17.0.2"
-set "MAVEN_HOME=%ROOT_DIR%\maven\apache-maven-3.9.6"
-set "PATH=%JAVA_HOME%\bin;%MAVEN_HOME%\bin;%PATH%"
+REM Limpar porta
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":4001" ^| findstr "LISTENING"') do (
+    taskkill /F /PID %%a >nul 2>&1
+)
 
-cd /d "%ROOT_DIR%\backend"
-echo Iniciando Spring Boot (mvn spring-boot:run)...
-call "%MAVEN_HOME%\bin\mvn.cmd" spring-boot:run
-pause
+echo Iniciando Backend em modo desenvolvimento...
+python app.py

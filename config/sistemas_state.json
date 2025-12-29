@@ -35,7 +35,7 @@
     "opcoes": {}
   },
   "qore": {
-    "ativo": false,
+    "ativo": true,
     "opcoes": {
       "excel": true,
       "pdf": true,

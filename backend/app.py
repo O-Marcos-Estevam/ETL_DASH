@@ -101,7 +101,8 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
-            except:
+            except Exception as e:
+                logger.warning(f"Erro ao enviar mensagem via WebSocket: {e}")
                 disconnect_list.append(connection)
 
         for conn in disconnect_list:
@@ -143,8 +144,38 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
+def check_port_available(host: str, port: int) -> bool:
+    """Verifica se a porta esta disponivel tentando fazer bind"""
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s.bind((host, port))
+                return True  # Porta esta livre
+            except OSError:
+                return False  # Porta ja esta em uso
+    except Exception as e:
+        logger.warning(f"Erro ao verificar porta: {e}")
+        return True  # Em caso de erro, tenta iniciar mesmo assim
+
 if __name__ == "__main__":
     import uvicorn
+    
+    # Verificar se porta esta disponivel
+    if not check_port_available(settings.HOST, settings.PORT):
+        logger.error(f"Porta {settings.PORT} ja esta em uso!")
+        logger.info("Tentando usar porta alternativa 4002...")
+        settings.PORT = 4002
+        
+        # Verificar porta 4002
+        if not check_port_available(settings.HOST, settings.PORT):
+            logger.error(f"Porta {settings.PORT} tambem esta em uso!")
+            logger.error("Por favor, encerre processos Python ou configure outra porta via ETL_PORT")
+            import sys
+            sys.exit(1)
+    
+    logger.info(f"Iniciando servidor em {settings.HOST}:{settings.PORT}")
     uvicorn.run(
         "app:app",
         host=settings.HOST,

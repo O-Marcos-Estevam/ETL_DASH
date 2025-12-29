@@ -2,7 +2,7 @@
 from .sistemas import SistemaService, get_sistema_service
 from .credentials import ConfigService, get_config_service
 from .worker import BackgroundWorker, get_worker
-from .executor import PythonExecutor, get_executor
+from .executor import ETLExecutor, get_executor
 
 __all__ = [
     "SistemaService",
@@ -11,6 +11,6 @@ __all__ = [
     "get_config_service",
     "BackgroundWorker",
     "get_worker",
-    "PythonExecutor",
+    "ETLExecutor",
     "get_executor",
 ]

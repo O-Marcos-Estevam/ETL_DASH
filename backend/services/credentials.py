@@ -140,6 +140,13 @@ class ConfigService:
 
         return self._credentials.get(system_id)
 
+    def get_system_credentials_masked(self, system_id: str) -> Optional[Dict[str, Any]]:
+        """Retorna credenciais de um sistema especifico com senhas mascaradas"""
+        creds = self.get_system_credentials(system_id)
+        if creds is None:
+            return None
+        return self._mask_passwords(creds)
+
     def get_fundos(self, system_id: str = None) -> Dict[str, Any]:
         """Retorna configuracao de fundos"""
         fundos = self._credentials.get("fundos", {})

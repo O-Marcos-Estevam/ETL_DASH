@@ -16,7 +16,9 @@
       "Bash(find . -maxdepth 1 -type d -exec sh -c 'count=$\\(find \"\"$1\"\" -type f 2>/dev/null | wc -l\\); echo \"\"$1: $count files\"\"' _ {} ;)",
       "Bash(git commit:*)",
       "Bash(cd:*)",
-      "Bash(xcopy:*)"
+      "Bash(xcopy:*)",
+      "Bash(findstr:*)",
+      "Bash(xargs cat:*)"
     ]
   }
 }

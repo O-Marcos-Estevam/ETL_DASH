@@ -74,7 +74,7 @@ async def get_system_credentials(system_id: str):
         404: Sistema nao encontrado
     """
     service = get_config_service()
-    creds = service.get_system_credentials(system_id)
+    creds = service.get_system_credentials_masked(system_id)
 
     if creds is None:
         raise HTTPException(
@@ -82,8 +82,7 @@ async def get_system_credentials(system_id: str):
             detail=f"Credenciais para '{system_id}' nao encontradas"
         )
 
-    # Mascarar senhas
-    return service._mask_passwords(creds)
+    return creds
 
 
 @router.get("/fundos")
