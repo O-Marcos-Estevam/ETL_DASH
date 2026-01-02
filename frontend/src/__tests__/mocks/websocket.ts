@@ -14,7 +14,6 @@ export const mockLogEntry: LogEntry = {
 
 // Dados mock de status update
 export const mockStatusUpdate: StatusUpdate = {
-  sistema_id: 'maps',
   status: 'RUNNING',
   progresso: 50,
   mensagem: 'Processando arquivos...',

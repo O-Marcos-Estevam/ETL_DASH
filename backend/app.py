@@ -1,12 +1,21 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from typing import List
+from typing import List, Optional
 import logging
 
 import services.state as state_service
 from services.worker import get_worker
 from config import settings
+
+# Import security middleware
+from middleware.security_headers import SecurityHeadersMiddleware
+from middleware.rate_limiter import RateLimitMiddleware
+
+# Import auth router and dependencies
+from auth.router import router as auth_router
+from auth.dependencies import get_ws_user
+from auth.database import init_auth_tables
 
 # Configurar logging
 logging.basicConfig(
@@ -25,6 +34,10 @@ async def lifespan(_app: FastAPI):
     database.init_db()
     logger.info("Database inicializado")
 
+    # Initialize auth tables
+    init_auth_tables()
+    logger.info("Auth tables inicializadas")
+
     # Iniciar worker
     worker = get_worker()
     await worker.start()
@@ -37,15 +50,74 @@ async def lifespan(_app: FastAPI):
     logger.info("BackgroundWorker parado")
 
 
-app = FastAPI(title="ETL Dashboard V2 Backend", lifespan=lifespan)
+# OpenAPI Tags para organizar documentação
+openapi_tags = [
+    {
+        "name": "auth",
+        "description": "Autenticação e gerenciamento de usuários"
+    },
+    {
+        "name": "execution",
+        "description": "Execução e monitoramento de pipelines ETL"
+    },
+    {
+        "name": "sistemas",
+        "description": "Gerenciamento de sistemas ETL disponíveis"
+    },
+    {
+        "name": "credentials",
+        "description": "Configuração de credenciais e paths"
+    },
+    {
+        "name": "config",
+        "description": "Configurações gerais do sistema"
+    },
+]
 
-# CORS Setup - Usa origens configuradas (padrao: localhost:4000)
+app = FastAPI(
+    title="ETL Dashboard API",
+    description="""
+## API para gerenciamento de pipelines ETL
+
+Esta API permite:
+- **Executar** pipelines ETL para múltiplos sistemas
+- **Monitorar** status de execução em tempo real via WebSocket
+- **Configurar** credenciais e paths de sistemas
+- **Gerenciar** usuários e permissões
+
+### Autenticação
+A maioria dos endpoints requer autenticação JWT.
+Use `/api/auth/login` para obter um token de acesso.
+
+### WebSocket
+Conecte em `/ws?token=<jwt>` para receber atualizações em tempo real.
+    """,
+    version="2.1.0",
+    openapi_tags=openapi_tags,
+    lifespan=lifespan,
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
+    license_info={
+        "name": "Proprietary",
+    },
+)
+
+# Security Middleware (order matters - first added = outermost)
+# Add security headers to all responses
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Rate limiting
+app.add_middleware(RateLimitMiddleware, default_limit=100, window_seconds=60)
+
+# CORS Setup - More restrictive configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
+    max_age=600,  # Cache preflight for 10 minutes
 )
 
 # -------------------------------------------------------------------------
@@ -139,18 +211,68 @@ from routers.execution import router as execution_router
 from routers.sistemas import router as sistemas_router
 from routers.credentials import router as credentials_router
 
+# Include auth router first
+app.include_router(auth_router)
+
+# Include other routers
 app.include_router(config_router)
 app.include_router(execution_router)
 app.include_router(sistemas_router)
 app.include_router(credentials_router)
 
 
-@app.get("/api/health")
+from models.api import HealthResponse
+
+@app.get(
+    "/api/health",
+    response_model=HealthResponse,
+    tags=["config"],
+    summary="Health Check",
+    description="Verifica se a API está funcionando corretamente."
+)
 async def health_check():
-    return {"status": "ok", "version": "2.1.0"}
+    """Retorna status de saúde da API"""
+    return HealthResponse(status="ok", version="2.1.0")
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
+    """
+    WebSocket endpoint for real-time logs and status updates.
+
+    Supports optional authentication via query parameter: ws://host/ws?token=<jwt>
+    If AUTH_REQUIRED environment variable is set, authentication is mandatory.
+    """
+    import os
+
+    # Check if authentication is required
+    auth_required = os.getenv("AUTH_REQUIRED", "false").lower() == "true"
+
+    if auth_required and token:
+        try:
+            # Validate token
+            from auth.security import decode_token
+            from auth.database import get_user_by_username
+
+            payload = decode_token(token)
+            if not payload or payload.type != "access":
+                await websocket.close(code=4001, reason="Invalid token")
+                return
+
+            user = get_user_by_username(payload.sub)
+            if not user or not user.is_active:
+                await websocket.close(code=4003, reason="User not found or disabled")
+                return
+
+            logger.info(f"WebSocket authenticated: {user.username}")
+        except Exception as e:
+            logger.warning(f"WebSocket auth error: {e}")
+            await websocket.close(code=4001, reason="Authentication failed")
+            return
+    elif auth_required and not token:
+        await websocket.close(code=4001, reason="Token required")
+        return
+
+    # Connect and handle messages
     await manager.connect(websocket)
     try:
         while True:

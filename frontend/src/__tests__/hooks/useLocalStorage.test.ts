@@ -1,15 +1,15 @@
 /**
  * Testes para hook useLocalStorage
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 
 describe('useLocalStorage', () => {
-  const localStorageMock = window.localStorage as {
-    getItem: ReturnType<typeof vi.fn>
-    setItem: ReturnType<typeof vi.fn>
-    removeItem: ReturnType<typeof vi.fn>
+  const localStorageMock = window.localStorage as unknown as {
+    getItem: Mock
+    setItem: Mock
+    removeItem: Mock
   }
 
   beforeEach(() => {

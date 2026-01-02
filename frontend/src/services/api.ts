@@ -2,15 +2,26 @@
  * ETL API Service - TanStack Query integration
  */
 import type { ConfiguracaoETL, Sistema, ApiResponse } from '@/types/etl';
+import { getAccessToken, refreshTokens, clearTokens } from './authApi';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 const DEFAULT_TIMEOUT = 5000;
 
-// Base request function with timeout
+// Get authorization headers
+function getAuthHeaders(): Record<string, string> {
+    const token = getAccessToken();
+    if (token) {
+        return { 'Authorization': `Bearer ${token}` };
+    }
+    return {};
+}
+
+// Base request function with timeout and auth
 async function request<T>(
     endpoint: string,
     options: RequestInit = {},
-    timeoutMs: number = DEFAULT_TIMEOUT
+    timeoutMs: number = DEFAULT_TIMEOUT,
+    retry: boolean = true
 ): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -21,14 +32,30 @@ async function request<T>(
             signal: controller.signal,
             headers: {
                 'Content-Type': 'application/json',
+                ...getAuthHeaders(),
                 ...options.headers,
             },
         });
 
         clearTimeout(timeoutId);
 
+        // Handle 401 Unauthorized - try token refresh
+        if (response.status === 401 && retry) {
+            const refreshed = await refreshTokens();
+            if (refreshed) {
+                // Retry request with new token
+                return request<T>(endpoint, options, timeoutMs, false);
+            } else {
+                // Refresh failed, redirect to login
+                clearTokens();
+                window.location.href = '/login';
+                throw new Error('Sessão expirada. Faça login novamente.');
+            }
+        }
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
         }
 
         return response.json();

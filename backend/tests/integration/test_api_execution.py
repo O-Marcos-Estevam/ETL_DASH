@@ -57,7 +57,7 @@ def mock_sistema_service():
 class TestExecutionEndpoints:
     """Testes para endpoints de execucao"""
 
-    async def test_execute_pipeline(self, mock_database, mock_sistema_service):
+    async def test_execute_pipeline(self, mock_database, mock_sistema_service, disable_auth):
         """POST /api/execute enfileira pipeline"""
         from httpx import AsyncClient, ASGITransport
 
@@ -81,7 +81,7 @@ class TestExecutionEndpoints:
             assert "job_id" in data
             mock_database.add_job.assert_called_once()
 
-    async def test_execute_empty_sistemas_returns_error(self, mock_database, mock_sistema_service):
+    async def test_execute_empty_sistemas_returns_error(self, mock_database, mock_sistema_service, disable_auth):
         """POST /api/execute com sistemas vazio retorna erro"""
         from httpx import AsyncClient, ASGITransport
 
@@ -99,7 +99,7 @@ class TestExecutionEndpoints:
             # API retorna erro quando nenhum sistema e fornecido
             assert response.status_code in [200, 400]
 
-    async def test_execute_when_running_queues_job(self, mock_database, mock_sistema_service):
+    async def test_execute_when_running_queues_job(self, mock_database, mock_sistema_service, disable_auth):
         """POST /api/execute enfileira job mesmo quando ha outro rodando"""
         from httpx import AsyncClient, ASGITransport
 
@@ -119,7 +119,7 @@ class TestExecutionEndpoints:
             # API permite enfileirar jobs (eles ficam pending)
             assert response.status_code == 200
 
-    async def test_get_job_status(self, mock_database):
+    async def test_get_job_status(self, mock_database, disable_auth):
         """GET /api/jobs/{id} retorna status do job"""
         from httpx import AsyncClient, ASGITransport
 
@@ -135,7 +135,7 @@ class TestExecutionEndpoints:
             assert data["id"] == 1
             assert data["status"] == "pending"
 
-    async def test_get_job_not_found(self, mock_database):
+    async def test_get_job_not_found(self, mock_database, disable_auth):
         """GET /api/jobs/{id} retorna 404 para inexistente"""
         from httpx import AsyncClient, ASGITransport
 
@@ -150,7 +150,7 @@ class TestExecutionEndpoints:
 
             assert response.status_code == 404
 
-    async def test_list_jobs(self, mock_database):
+    async def test_list_jobs(self, mock_database, disable_auth):
         """GET /api/jobs lista jobs"""
         from httpx import AsyncClient, ASGITransport
 
@@ -174,7 +174,7 @@ class TestExecutionEndpoints:
             else:
                 assert len(data) == 2
 
-    async def test_list_jobs_with_filter(self, mock_database):
+    async def test_list_jobs_with_filter(self, mock_database, disable_auth):
         """GET /api/jobs?status=pending filtra por status"""
         from httpx import AsyncClient, ASGITransport
 
@@ -188,7 +188,7 @@ class TestExecutionEndpoints:
             assert response.status_code == 200
             mock_database.list_jobs.assert_called_with(status="pending", limit=20, offset=0)
 
-    async def test_cancel_job(self, mock_database):
+    async def test_cancel_job(self, mock_database, disable_auth):
         """POST /api/cancel/{id} cancela job"""
         from httpx import AsyncClient, ASGITransport
 
@@ -214,7 +214,7 @@ class TestExecutionEndpoints:
 class TestExecuteSingleEndpoint:
     """Testes para execucao de sistema unico"""
 
-    async def test_execute_single(self, mock_database, mock_sistema_service):
+    async def test_execute_single(self, mock_database, mock_sistema_service, disable_auth):
         """POST /api/execute/{sistema_id} executa sistema unico"""
         from httpx import AsyncClient, ASGITransport
 
@@ -233,7 +233,7 @@ class TestExecuteSingleEndpoint:
             data = response.json()
             assert "job_id" in data
 
-    async def test_execute_single_invalid_sistema(self, mock_database, mock_sistema_service):
+    async def test_execute_single_invalid_sistema(self, mock_database, mock_sistema_service, disable_auth):
         """POST /api/execute/{sistema_id} rejeita sistema invalido"""
         from httpx import AsyncClient, ASGITransport
 

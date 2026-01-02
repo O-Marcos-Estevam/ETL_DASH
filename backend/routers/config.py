@@ -1,7 +1,9 @@
 """
 Config Router - Endpoints para configuracao ETL
+
+GET config available for viewers, POST requires admin.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any
 import json
 import os
@@ -15,6 +17,8 @@ if _backend_dir not in sys.path:
 
 from services.sistemas import get_sistema_service
 from services.credentials import get_config_service
+from auth.dependencies import require_admin, require_viewer
+from auth.models import UserInDB
 
 router = APIRouter(tags=["config"])
 
@@ -25,13 +29,13 @@ CONFIG_PATH = os.path.abspath(
 
 
 @router.get("/api/config")
-async def get_config():
+async def get_config(current_user: UserInDB = Depends(require_viewer)):
     """
-    Retorna configuracao completa do ETL.
+    Retorna configuracao completa do ETL (ADMIN e VIEWER).
 
     Combina:
     - Metadata dos sistemas (do SistemaService)
-    - Credenciais (do ConfigService)
+    - Credenciais (do ConfigService) - senhas mascaradas para viewer
     - Periodo padrao
 
     Returns:
@@ -69,9 +73,12 @@ async def get_config():
 
 
 @router.post("/api/config")
-async def update_config(config: Dict[str, Any]):
+async def update_config(
+    config: Dict[str, Any],
+    current_user: UserInDB = Depends(require_admin)
+):
     """
-    Atualiza configuracao.
+    Atualiza configuracao (ADMIN ONLY).
 
     Salva credenciais no credentials.json (excluindo campos de metadata).
     Atualiza estado dos sistemas no SistemaService.
@@ -119,9 +126,9 @@ async def update_config(config: Dict[str, Any]):
 
 
 @router.get("/api/config/paths")
-async def get_paths():
+async def get_paths(current_user: UserInDB = Depends(require_viewer)):
     """
-    Retorna configuracao de paths.
+    Retorna configuracao de paths (ADMIN e VIEWER).
 
     Returns:
         Dict com paths configurados

@@ -1,6 +1,8 @@
 """
 ETL Pipeline - Main Entry Point
-Executa os pipelines de ETL chamados pelo Dashboard Java
+Executa os pipelines de ETL chamados pelo Dashboard
+
+Suporta credenciais em formato criptografado (AES-256-GCM) e plaintext (legado).
 """
 import argparse
 import json
@@ -9,21 +11,49 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 
-# Adiciona modules ao path
+# Adiciona modules e utils ao path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'modules'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'utils'))
 
 def log(level: str, sistema: str, mensagem: str):
-    """Log formatado para parsing pelo Java"""
+    """Log formatado para parsing pelo backend"""
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[{level}] [{sistema}] {mensagem}", flush=True)
 
 def load_credentials(config_path: str) -> dict:
-    """Carrega credenciais do arquivo JSON"""
+    """
+    Carrega credenciais do arquivo JSON (criptografado ou plaintext).
+
+    Suporta automaticamente:
+    - credentials.encrypted.json (formato criptografado AES-256-GCM)
+    - credentials.json (formato plaintext legado)
+    """
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+
+        # Verificar se esta criptografado
+        if "encryption" in data:
+            try:
+                from crypto import ETLCrypto
+                crypto = ETLCrypto()
+                decrypted = crypto.decrypt_credentials(data)
+                log("INFO", "SISTEMA", "Credenciais carregadas (formato criptografado)")
+                return decrypted
+            except ValueError as e:
+                log("ERROR", "SISTEMA", f"Erro de criptografia: {e}")
+                log("ERROR", "SISTEMA", "Configure a variavel ETL_MASTER_KEY para descriptografar")
+                sys.exit(1)
+            except ImportError:
+                log("ERROR", "SISTEMA", "Modulo crypto nao encontrado")
+                sys.exit(1)
+
+        # Formato plaintext
+        log("WARN", "SISTEMA", "Credenciais em TEXTO PLANO - considere migrar para formato criptografado")
+        return data
+
     except FileNotFoundError:
-        log("ERROR", "SISTEMA", f"Arquivo de credenciais não encontrado: {config_path}")
+        log("ERROR", "SISTEMA", f"Arquivo de credenciais nao encontrado: {config_path}")
         sys.exit(1)
     except json.JSONDecodeError as e:
         log("ERROR", "SISTEMA", f"Erro ao ler JSON de credenciais: {e}")
@@ -98,8 +128,8 @@ def clear_folders(folders: list):
 
 def main():
     parser = argparse.ArgumentParser(description='ETL Pipeline Executor')
-    parser.add_argument('--config', default='config/credentials.json', 
-                        help='Caminho para arquivo de credenciais')
+    parser.add_argument('--config', default='config/credentials.encrypted.json',
+                        help='Caminho para arquivo de credenciais (encrypted ou plaintext)')
     parser.add_argument('--sistemas', nargs='+', 
                         choices=['amplis_reag', 'amplis_master', 'maps', 'fidc', 'jcot', 'britech', 'qore', 'trustee'],
                         help='Sistemas a executar')
@@ -138,14 +168,29 @@ def main():
     parser.add_argument('--qore-fundos', help='JSON lista de fundos QORE')
     
     args = parser.parse_args()
-    
-    # Resolve caminho do config
+
+    # Resolve caminho do config com fallback para plaintext
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(script_dir, '..', args.config)
+
+    # Se arquivo especificado nao existe, tentar alternativas
     if not os.path.exists(config_path):
-        config_path = args.config
-    
-    log("INFO", "SISTEMA", "Carregando configurações...")
+        # Tentar caminho relativo direto
+        if os.path.exists(args.config):
+            config_path = args.config
+        # Fallback para plaintext se encrypted nao existe
+        elif 'encrypted' in args.config:
+            plaintext_path = config_path.replace('.encrypted', '')
+            if os.path.exists(plaintext_path):
+                log("WARN", "SISTEMA", "Arquivo criptografado nao encontrado, usando plaintext")
+                config_path = plaintext_path
+            else:
+                # Tentar no diretorio atual
+                plaintext_path = args.config.replace('.encrypted', '')
+                if os.path.exists(plaintext_path):
+                    config_path = plaintext_path
+
+    log("INFO", "SISTEMA", f"Carregando configuracoes de: {config_path}")
     credentials = load_credentials(config_path)
     
     # Data padrão: D-1

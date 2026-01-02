@@ -1,7 +1,9 @@
 """
 Execution Router - Endpoints para execucao de pipelines ETL
+
+Execute and cancel require admin, list/get jobs available for viewers.
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import logging
@@ -15,6 +17,14 @@ from core import database
 from services.sistemas import get_sistema_service
 from services.worker import get_worker
 from models.sistema import SistemaStatus
+from models.api import (
+    ExecuteResponse,
+    JobListResponse,
+    CancelResponse,
+    ErrorResponse
+)
+from auth.dependencies import require_admin, require_viewer
+from auth.models import UserInDB
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -42,16 +52,26 @@ class ExecuteSingleRequest(BaseModel):
 
 # ==================== EXECUCAO ====================
 
-@router.post("/api/execute")
-async def execute_pipeline(request: ExecuteRequest):
+@router.post(
+    "/api/execute",
+    response_model=ExecuteResponse,
+    summary="Executar Pipeline ETL",
+    responses={
+        400: {"model": ErrorResponse, "description": "Nenhum sistema selecionado"},
+        500: {"model": ErrorResponse, "description": "Erro interno"}
+    }
+)
+async def execute_pipeline(
+    request: ExecuteRequest,
+    current_user: UserInDB = Depends(require_admin)
+):
     """
-    Enfileira execucao de um pipeline ETL completo.
+    Enfileira execucao de um pipeline ETL completo (ADMIN ONLY).
 
-    Args:
-        request: Parametros de execucao (sistemas, datas, opcoes)
-
-    Returns:
-        Status e job_id do job enfileirado
+    - **sistemas**: Lista de IDs dos sistemas a executar
+    - **data_inicial**: Data inicial (YYYY-MM-DD)
+    - **data_final**: Data final (YYYY-MM-DD)
+    - **dry_run**: Se True, simula execução
     """
     try:
         # Validar que pelo menos um sistema foi selecionado
@@ -94,9 +114,13 @@ async def execute_pipeline(request: ExecuteRequest):
 
 
 @router.post("/api/execute/{sistema_id}")
-async def execute_single_system(sistema_id: str, request: ExecuteSingleRequest):
+async def execute_single_system(
+    sistema_id: str,
+    request: ExecuteSingleRequest,
+    current_user: UserInDB = Depends(require_admin)
+):
     """
-    Enfileira execucao de um sistema ETL individual.
+    Enfileira execucao de um sistema ETL individual (ADMIN ONLY).
 
     Args:
         sistema_id: ID do sistema a executar
@@ -157,9 +181,12 @@ async def execute_single_system(sistema_id: str, request: ExecuteSingleRequest):
 
 
 @router.post("/api/cancel/{job_id}")
-async def cancel_execution(job_id: int):
+async def cancel_execution(
+    job_id: int,
+    current_user: UserInDB = Depends(require_admin)
+):
     """
-    Cancela uma execucao em andamento.
+    Cancela uma execucao em andamento (ADMIN ONLY).
 
     Args:
         job_id: ID do job a cancelar
@@ -211,22 +238,22 @@ async def cancel_execution(job_id: int):
 
 # ==================== JOBS ====================
 
-@router.get("/api/jobs")
+@router.get(
+    "/api/jobs",
+    response_model=JobListResponse,
+    summary="Listar Jobs",
+    description="Lista todos os jobs de execução com suporte a filtros e paginação."
+)
 async def list_jobs(
-    status: Optional[str] = Query(None, description="Filtrar por status"),
-    limit: int = Query(20, description="Limite de resultados"),
-    offset: int = Query(0, description="Offset para paginacao")
+    status: Optional[str] = Query(None, description="Filtrar por status (pending, running, completed, error, cancelled)"),
+    limit: int = Query(20, ge=1, le=100, description="Limite de resultados"),
+    offset: int = Query(0, ge=0, description="Offset para paginacao"),
+    current_user: UserInDB = Depends(require_viewer)
 ):
     """
-    Lista jobs de execucao.
+    Lista jobs de execucao (ADMIN e VIEWER).
 
-    Args:
-        status: Filtrar por status (pending, running, completed, error, cancelled)
-        limit: Numero maximo de resultados
-        offset: Offset para paginacao
-
-    Returns:
-        Lista de jobs
+    Suporta filtros por status e paginação.
     """
     jobs = database.list_jobs(status=status, limit=limit, offset=offset)
     return {
@@ -238,9 +265,12 @@ async def list_jobs(
 
 
 @router.get("/api/jobs/{job_id}")
-async def get_job_status(job_id: int):
+async def get_job_status(
+    job_id: int,
+    current_user: UserInDB = Depends(require_viewer)
+):
     """
-    Retorna status de um job especifico.
+    Retorna status de um job especifico (ADMIN e VIEWER).
 
     Args:
         job_id: ID do job

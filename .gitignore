@@ -45,6 +45,11 @@ config/credentials.backup.*.json
 .env
 .env.local
 .env.production
+!.env.example
+
+# Docker (keep Dockerfiles, ignore runtime)
+*.tar
+docker-compose.override.yml
 
 # Shortcuts & misc
 *.lnk
@@ -59,3 +64,17 @@ build/pyinstaller/dist/
 
 # Web build (frontend production build)
 web/
+
+# Playwright test artifacts
+frontend/playwright-report/
+frontend/test-results/
+playwright-report/
+test-results/
+
+# Generated keys (NEVER commit!)
+GENERATED_KEY.txt
+*.pem
+
+# Windows artifacts
+nul
+backend/nul

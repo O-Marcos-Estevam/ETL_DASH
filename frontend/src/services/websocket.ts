@@ -2,6 +2,7 @@
  * WebSocket Service - Real-time logs and status updates
  */
 import type { LogEntry, StatusUpdate } from '@/types/etl';
+import { getAccessToken } from './authApi';
 
 // Extended log entry with job_id from backend
 export interface WSLogEntry extends LogEntry {
@@ -19,6 +20,7 @@ type LogHandler = (log: WSLogEntry) => void;
 type StatusHandler = (sistemaId: string, status: StatusUpdate) => void;
 type ConnectionHandler = (connected: boolean) => void;
 type JobCompleteHandler = (payload: JobCompletePayload) => void;
+type AuthErrorHandler = () => void;
 
 class WebSocketService {
     private ws: WebSocket | null = null;
@@ -26,6 +28,7 @@ class WebSocketService {
     private statusHandlers: StatusHandler[] = [];
     private connectionHandlers: ConnectionHandler[] = [];
     private jobCompleteHandlers: JobCompleteHandler[] = [];
+    private authErrorHandlers: AuthErrorHandler[] = [];
     private reconnectAttempts = 0;
     private maxReconnectAttempts = 10;
     private reconnectDelay = 2000;
@@ -40,7 +43,13 @@ class WebSocketService {
             }
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.hostname}:4001/ws`;
+            let wsUrl = `${protocol}//${window.location.hostname}:4001/ws`;
+
+            // Add authentication token if available
+            const token = getAccessToken();
+            if (token) {
+                wsUrl += `?token=${encodeURIComponent(token)}`;
+            }
 
             try {
                 this.ws = new WebSocket(wsUrl);
@@ -64,6 +73,15 @@ class WebSocketService {
                 this.ws.onclose = (event) => {
                     console.log('[WS] Disconnected', event.code, event.reason);
                     this.notifyConnectionChange(false);
+
+                    // Handle auth errors (4001 = Invalid/missing token, 4003 = User disabled)
+                    if (event.code === 4001 || event.code === 4003) {
+                        console.warn('[WS] Authentication error:', event.reason);
+                        this.authErrorHandlers.forEach(handler => handler());
+                        // Don't attempt reconnect on auth errors
+                        return;
+                    }
+
                     this.attemptReconnect();
                 };
 
@@ -192,6 +210,13 @@ class WebSocketService {
         this.jobCompleteHandlers.push(handler);
         return () => {
             this.jobCompleteHandlers = this.jobCompleteHandlers.filter(h => h !== handler);
+        };
+    }
+
+    onAuthError(handler: AuthErrorHandler): () => void {
+        this.authErrorHandlers.push(handler);
+        return () => {
+            this.authErrorHandlers = this.authErrorHandlers.filter(h => h !== handler);
         };
     }
 }

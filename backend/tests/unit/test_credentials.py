@@ -225,12 +225,17 @@ class TestConfigServiceWithFile:
 
     def test_save_to_file(self, temp_credentials_path, sample_credentials):
         """Salva credenciais em arquivo"""
-        with patch.object(ConfigService, 'CREDENTIALS_PATH', temp_credentials_path):
-            # Criar diretorio
-            os.makedirs(os.path.dirname(temp_credentials_path), exist_ok=True)
+        # Criar diretorio antes de patching
+        os.makedirs(os.path.dirname(temp_credentials_path), exist_ok=True)
 
+        # Criar arquivo inicial vazio para evitar erro de load
+        with open(temp_credentials_path, "w") as f:
+            json.dump({}, f)
+
+        # Patch both paths since without encryption it saves to LEGACY_CREDENTIALS_PATH
+        with patch.object(ConfigService, 'CREDENTIALS_PATH', temp_credentials_path), \
+             patch.object(ConfigService, 'LEGACY_CREDENTIALS_PATH', temp_credentials_path):
             service = ConfigService()
-            service._credentials = {}
             service.save_credentials(sample_credentials)
 
             # Verificar arquivo

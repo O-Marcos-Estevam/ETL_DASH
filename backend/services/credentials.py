@@ -1,35 +1,91 @@
 """
 Config Service - Gerencia configuracoes e credenciais
+
+Suporta credenciais em formato criptografado (AES-256-GCM) e plaintext (legado).
 """
 import json
 import os
+import logging
 from typing import Dict, Any, Optional
-from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigService:
     """Servico para gerenciar configuracoes ETL"""
 
-    # Caminho do arquivo de credenciais
+    # Caminho do arquivo de credenciais criptografadas (preferido)
     CREDENTIALS_PATH = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "config", "credentials.encrypted.json")
+    )
+
+    # Caminho do arquivo legado (plaintext) - fallback para migracao
+    LEGACY_CREDENTIALS_PATH = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "..", "..", "config", "credentials.json")
     )
 
     def __init__(self):
         self._credentials: Dict[str, Any] = {}
+        self._crypto = None
+        self._is_encrypted = False
         self._load_credentials()
 
+    def _get_crypto(self):
+        """Lazy load do servico de criptografia"""
+        if self._crypto is None:
+            try:
+                from .crypto import get_crypto_service
+                self._crypto = get_crypto_service()
+            except ValueError as e:
+                logger.warning(f"Crypto service nao disponivel: {e}")
+                return None
+        return self._crypto
+
     def _load_credentials(self):
-        """Carrega credenciais do arquivo"""
+        """Carrega credenciais do arquivo (criptografado ou plaintext)"""
+        # Tentar arquivo criptografado primeiro
         if os.path.exists(self.CREDENTIALS_PATH):
             try:
                 with open(self.CREDENTIALS_PATH, "r", encoding="utf-8") as f:
-                    self._credentials = json.load(f)
+                    data = json.load(f)
+
+                # Verificar se esta criptografado
+                if "encryption" in data:
+                    crypto = self._get_crypto()
+                    if crypto and crypto.is_encrypted(data):
+                        self._credentials = crypto.decrypt_credentials(data)
+                        self._is_encrypted = True
+                        logger.info("Credenciais criptografadas carregadas com sucesso")
+                        return
+                    else:
+                        logger.warning("Arquivo tem formato de criptografia mas crypto nao disponivel")
+                else:
+                    # Arquivo existe mas nao esta criptografado
+                    self._credentials = data
+                    logger.info("Credenciais carregadas (formato plaintext no arquivo encrypted)")
+                    return
+
             except Exception as e:
-                print(f"Erro ao carregar credentials.json: {e}")
-                self._credentials = {}
-        else:
-            self._credentials = self._get_default_credentials()
+                logger.error(f"Erro ao carregar credentials.encrypted.json: {e}")
+
+        # Fallback para arquivo legado (plaintext)
+        if os.path.exists(self.LEGACY_CREDENTIALS_PATH):
+            logger.warning(
+                "Carregando credenciais em TEXTO PLANO. "
+                "Execute 'python scripts/migrate_credentials.py' para migrar para formato criptografado."
+            )
+            try:
+                with open(self.LEGACY_CREDENTIALS_PATH, "r", encoding="utf-8") as f:
+                    self._credentials = json.load(f)
+                self._is_encrypted = False
+                return
+            except Exception as e:
+                logger.error(f"Erro ao carregar credentials.json: {e}")
+
+        # Nenhum arquivo encontrado - usar defaults
+        logger.warning("Nenhum arquivo de credenciais encontrado. Usando configuracao padrao.")
+        self._credentials = self._get_default_credentials()
+        self._is_encrypted = False
 
     def _get_default_credentials(self) -> Dict[str, Any]:
         """Retorna estrutura padrao de credenciais"""
@@ -61,15 +117,38 @@ class ConfigService:
         }
 
     def _save_credentials(self):
-        """Salva credenciais no arquivo"""
-        # Criar diretorio se nao existir
-        os.makedirs(os.path.dirname(self.CREDENTIALS_PATH), exist_ok=True)
+        """Salva credenciais no arquivo (criptografado se possivel)"""
+        crypto = self._get_crypto()
 
-        with open(self.CREDENTIALS_PATH, "w", encoding="utf-8") as f:
+        if crypto:
+            # Salvar em formato criptografado
+            try:
+                os.makedirs(os.path.dirname(self.CREDENTIALS_PATH), exist_ok=True)
+                encrypted = crypto.encrypt_credentials(self._credentials)
+
+                with open(self.CREDENTIALS_PATH, "w", encoding="utf-8") as f:
+                    json.dump(encrypted, f, indent=4, ensure_ascii=False)
+
+                self._is_encrypted = True
+                logger.info("Credenciais salvas em formato criptografado")
+                return
+            except Exception as e:
+                logger.error(f"Erro ao salvar credenciais criptografadas: {e}")
+
+        # Fallback: salvar em plaintext (apenas para desenvolvimento)
+        logger.warning(
+            "Salvando credenciais em TEXTO PLANO. "
+            "Configure ETL_MASTER_KEY para habilitar criptografia."
+        )
+        os.makedirs(os.path.dirname(self.LEGACY_CREDENTIALS_PATH), exist_ok=True)
+
+        with open(self.LEGACY_CREDENTIALS_PATH, "w", encoding="utf-8") as f:
             json.dump(self._credentials, f, indent=4, ensure_ascii=False)
 
+        self._is_encrypted = False
+
     def get_credentials(self) -> Dict[str, Any]:
-        """Retorna todas as credenciais"""
+        """Retorna todas as credenciais (descriptografadas)"""
         return self._credentials.copy()
 
     def get_credentials_masked(self) -> Dict[str, Any]:
@@ -84,7 +163,7 @@ class ConfigService:
         if isinstance(obj, dict):
             masked = {}
             for key, value in obj.items():
-                if key.lower() in ["password", "senha", "secret", "token"]:
+                if key.lower() in ["password", "senha", "secret", "token", "api_key"]:
                     masked[key] = "********" if value else ""
                 else:
                     masked[key] = self._mask_passwords(value, depth + 1)
@@ -103,7 +182,7 @@ class ConfigService:
             self._save_credentials()
             return True
         except Exception as e:
-            print(f"Erro ao salvar credenciais: {e}")
+            logger.error(f"Erro ao salvar credenciais: {e}")
             return False
 
     def _merge_credentials(self, existing: Dict, new: Dict, depth: int = 0) -> Dict:
@@ -114,7 +193,7 @@ class ConfigService:
         result = existing.copy()
 
         for key, value in new.items():
-            if key.lower() in ["password", "senha", "secret", "token"]:
+            if key.lower() in ["password", "senha", "secret", "token", "api_key"]:
                 # So atualiza se nao for mascara
                 if value and value != "********":
                     result[key] = value
@@ -156,11 +235,17 @@ class ConfigService:
 
     def reload(self):
         """Recarrega credenciais do arquivo"""
+        self._crypto = None  # Reset crypto para forcar re-inicializacao
         self._load_credentials()
+
+    def is_encrypted(self) -> bool:
+        """Retorna se as credenciais estao em formato criptografado"""
+        return self._is_encrypted
 
 
 # Instancia singleton
 _instance: Optional[ConfigService] = None
+
 
 def get_config_service() -> ConfigService:
     """Retorna instancia singleton do ConfigService"""
@@ -168,3 +253,9 @@ def get_config_service() -> ConfigService:
     if _instance is None:
         _instance = ConfigService()
     return _instance
+
+
+def reset_config_service() -> None:
+    """Reset singleton instance (util para testes)"""
+    global _instance
+    _instance = None

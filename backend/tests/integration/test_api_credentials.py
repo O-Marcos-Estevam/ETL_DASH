@@ -38,7 +38,7 @@ def mock_config_service(sample_credentials):
 class TestCredentialsEndpoints:
     """Testes para endpoints de credenciais"""
 
-    async def test_get_credentials(self, mock_config_service):
+    async def test_get_credentials(self, mock_config_service, disable_auth):
         """GET /api/credentials retorna credenciais mascaradas"""
         from httpx import AsyncClient, ASGITransport
 
@@ -54,7 +54,7 @@ class TestCredentialsEndpoints:
             assert data["amplis"]["reag"]["password"] == "********"
             assert data["amplis"]["reag"]["username"] == "user_reag"
 
-    async def test_save_credentials(self, mock_config_service):
+    async def test_save_credentials(self, mock_config_service, disable_auth):
         """POST /api/credentials salva credenciais"""
         from httpx import AsyncClient, ASGITransport
 
@@ -75,7 +75,7 @@ class TestCredentialsEndpoints:
             assert response.status_code == 200
             mock_config_service.save_credentials.assert_called_once()
 
-    async def test_save_credentials_failure(self, mock_config_service):
+    async def test_save_credentials_failure(self, mock_config_service, disable_auth):
         """POST /api/credentials retorna erro em falha"""
         from httpx import AsyncClient, ASGITransport
 
@@ -93,7 +93,7 @@ class TestCredentialsEndpoints:
 
             assert response.status_code == 500
 
-    async def test_get_system_credentials(self, mock_config_service):
+    async def test_get_system_credentials(self, mock_config_service, disable_auth):
         """GET /api/credentials/{system_id} retorna credenciais do sistema"""
         from httpx import AsyncClient, ASGITransport
 
@@ -108,7 +108,7 @@ class TestCredentialsEndpoints:
             data = response.json()
             assert data["password"] == "********"
 
-    async def test_get_system_credentials_not_found(self, mock_config_service):
+    async def test_get_system_credentials_not_found(self, mock_config_service, disable_auth):
         """GET /api/credentials/{system_id} retorna 404 ou 200 vazio para inexistente"""
         from httpx import AsyncClient, ASGITransport
 
@@ -124,7 +124,7 @@ class TestCredentialsEndpoints:
             # API pode retornar 404 ou 200 com valor None/vazio
             assert response.status_code in [200, 404]
 
-    async def test_get_fundos(self, mock_config_service):
+    async def test_get_fundos(self, mock_config_service, disable_auth):
         """GET /api/fundos retorna configuracao de fundos"""
         from httpx import AsyncClient, ASGITransport
 

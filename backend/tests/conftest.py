@@ -164,6 +164,124 @@ def test_client():
 
 
 # ============================================================
+# Fixtures de Autenticação
+# ============================================================
+
+@pytest.fixture
+def mock_admin_user():
+    """Usuario admin mock para testes"""
+    from auth.models import UserInDB, UserRole
+    from datetime import datetime
+
+    return UserInDB(
+        id=1,
+        username="test_admin",
+        hashed_password="$2b$12$test",
+        role=UserRole.ADMIN,
+        is_active=True,
+        created_at=datetime.now()
+    )
+
+
+@pytest.fixture
+def mock_viewer_user():
+    """Usuario viewer mock para testes"""
+    from auth.models import UserInDB, UserRole
+    from datetime import datetime
+
+    return UserInDB(
+        id=2,
+        username="test_viewer",
+        hashed_password="$2b$12$test",
+        role=UserRole.VIEWER,
+        is_active=True,
+        created_at=datetime.now()
+    )
+
+
+@pytest.fixture
+def disable_auth(mock_admin_user):
+    """Desabilita autenticacao para testes - usa admin por padrao"""
+    from app import app
+    from auth.dependencies import get_current_user, require_admin, require_viewer
+
+    async def override_get_current_user():
+        return mock_admin_user
+
+    async def override_require_admin():
+        return mock_admin_user
+
+    async def override_require_viewer():
+        return mock_admin_user
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[require_admin] = override_require_admin
+    app.dependency_overrides[require_viewer] = override_require_viewer
+    yield mock_admin_user
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def disable_auth_viewer(mock_viewer_user):
+    """Desabilita autenticacao para testes - usa viewer"""
+    from app import app
+    from auth.dependencies import get_current_user, require_admin, require_viewer
+
+    async def override_get_current_user():
+        return mock_viewer_user
+
+    async def override_require_viewer():
+        return mock_viewer_user
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[require_viewer] = override_require_viewer
+    yield mock_viewer_user
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def admin_token():
+    """Token JWT para usuário admin (para testes)"""
+    from auth.security import create_access_token
+    from auth.models import UserRole
+    return create_access_token(user_id=1, username="admin", role=UserRole.ADMIN)
+
+
+@pytest.fixture
+def viewer_token():
+    """Token JWT para usuário viewer (para testes)"""
+    from auth.security import create_access_token
+    from auth.models import UserRole
+    return create_access_token(user_id=2, username="viewer", role=UserRole.VIEWER)
+
+
+@pytest.fixture
+def auth_headers(admin_token):
+    """Headers de autenticação para requests admin"""
+    return {"Authorization": f"Bearer {admin_token}"}
+
+
+@pytest.fixture
+def viewer_headers(viewer_token):
+    """Headers de autenticação para requests viewer"""
+    return {"Authorization": f"Bearer {viewer_token}"}
+
+
+@pytest.fixture
+def authenticated_client(admin_token):
+    """Cliente de teste autenticado como admin"""
+    from httpx import AsyncClient, ASGITransport
+    from app import app
+
+    transport = ASGITransport(app=app)
+    return AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {admin_token}"}
+    )
+
+
+# ============================================================
 # Fixtures de Database
 # ============================================================
 

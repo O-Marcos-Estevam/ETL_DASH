@@ -1,7 +1,9 @@
 """
 Credentials Router - Endpoints para gerenciamento de credenciais
+
+Protected endpoints requiring admin authentication.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any
 import sys
 import os
@@ -10,17 +12,18 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.credentials import get_config_service
+from auth.dependencies import require_admin
+from auth.models import UserInDB
 
 router = APIRouter(prefix="/api", tags=["credentials"])
 
 
 @router.get("/credentials")
-async def get_credentials():
+async def get_credentials(current_user: UserInDB = Depends(require_admin)):
     """
-    Retorna todas as credenciais.
+    Retorna todas as credenciais (ADMIN ONLY).
 
     Nota: Senhas sao mascaradas por seguranca.
-    Para ver senhas reais, use o arquivo credentials.json diretamente.
 
     Returns:
         Dict com todas as credenciais (senhas mascaradas)
@@ -31,9 +34,12 @@ async def get_credentials():
 
 
 @router.post("/credentials")
-async def save_credentials(credentials: Dict[str, Any]):
+async def save_credentials(
+    credentials: Dict[str, Any],
+    current_user: UserInDB = Depends(require_admin)
+):
     """
-    Salva credenciais.
+    Salva credenciais (ADMIN ONLY).
 
     Campos de senha com valor "********" serao ignorados
     (preserva valor existente).
@@ -60,9 +66,12 @@ async def save_credentials(credentials: Dict[str, Any]):
 
 
 @router.get("/credentials/{system_id}")
-async def get_system_credentials(system_id: str):
+async def get_system_credentials(
+    system_id: str,
+    current_user: UserInDB = Depends(require_admin)
+):
     """
-    Retorna credenciais de um sistema especifico.
+    Retorna credenciais de um sistema especifico (ADMIN ONLY).
 
     Args:
         system_id: ID do sistema (ex: maps, amplis_reag)
@@ -86,9 +95,12 @@ async def get_system_credentials(system_id: str):
 
 
 @router.get("/fundos")
-async def get_fundos(system_id: str = None):
+async def get_fundos(
+    system_id: str = None,
+    current_user: UserInDB = Depends(require_admin)
+):
     """
-    Retorna configuracao de fundos.
+    Retorna configuracao de fundos (ADMIN ONLY).
 
     Args:
         system_id: (Opcional) Filtrar por sistema

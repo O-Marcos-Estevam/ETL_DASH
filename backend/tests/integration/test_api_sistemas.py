@@ -73,7 +73,7 @@ def mock_sistema_service():
 class TestSistemasEndpoints:
     """Testes para endpoints de sistemas"""
 
-    async def test_get_sistemas(self, mock_sistema_service):
+    async def test_get_sistemas(self, mock_sistema_service, disable_auth):
         """GET /api/sistemas retorna todos os sistemas"""
         from httpx import AsyncClient, ASGITransport
 
@@ -90,7 +90,7 @@ class TestSistemasEndpoints:
             assert "maps" in data
             assert data["amplis_reag"]["nome"] == "AMPLIS (REAG)"
 
-    async def test_get_sistemas_ativos(self, mock_sistema_service):
+    async def test_get_sistemas_ativos(self, mock_sistema_service, disable_auth):
         """GET /api/sistemas/ativos retorna apenas sistemas ativos"""
         from httpx import AsyncClient, ASGITransport
 
@@ -107,7 +107,7 @@ class TestSistemasEndpoints:
             assert "maps" in data
             assert "fidc" not in data  # inativo
 
-    async def test_get_sistema_by_id(self, mock_sistema_service):
+    async def test_get_sistema_by_id(self, mock_sistema_service, disable_auth):
         """GET /api/sistemas/{id} retorna sistema especifico"""
         from httpx import AsyncClient, ASGITransport
 
@@ -123,7 +123,7 @@ class TestSistemasEndpoints:
             assert data["id"] == "maps"
             assert data["nome"] == "MAPS"
 
-    async def test_get_sistema_not_found(self, mock_sistema_service):
+    async def test_get_sistema_not_found(self, mock_sistema_service, disable_auth):
         """GET /api/sistemas/{id} retorna 404 para inexistente"""
         from httpx import AsyncClient, ASGITransport
 
@@ -136,7 +136,7 @@ class TestSistemasEndpoints:
 
             assert response.status_code == 404
 
-    async def test_toggle_sistema(self, mock_sistema_service):
+    async def test_toggle_sistema(self, mock_sistema_service, disable_auth):
         """PATCH /api/sistemas/{id}/toggle alterna estado"""
         from httpx import AsyncClient, ASGITransport
 
@@ -152,7 +152,7 @@ class TestSistemasEndpoints:
             assert response.status_code == 200
             mock_sistema_service.toggle.assert_called_with("fidc", True)
 
-    async def test_toggle_sistema_not_found(self, mock_sistema_service):
+    async def test_toggle_sistema_not_found(self, mock_sistema_service, disable_auth):
         """PATCH /api/sistemas/{id}/toggle retorna 404 para inexistente"""
         from httpx import AsyncClient, ASGITransport
 
@@ -167,7 +167,7 @@ class TestSistemasEndpoints:
 
             assert response.status_code == 404
 
-    async def test_update_opcao(self, mock_sistema_service):
+    async def test_update_opcao(self, mock_sistema_service, disable_auth):
         """PATCH /api/sistemas/{id}/opcao atualiza opcao"""
         from httpx import AsyncClient, ASGITransport
 

@@ -128,13 +128,10 @@ class TestWebSocketEndpoint:
     """Testes para endpoint WebSocket"""
 
     async def test_websocket_connect(self):
-        """WebSocket aceita conexao"""
-        from httpx import AsyncClient, ASGITransport
-        from httpx_ws.transport import ASGIWebSocketTransport
-
+        """WebSocket aceita conexao - placeholder para teste futuro"""
         # Este teste verifica se o endpoint existe
         # Teste completo de WebSocket requer httpx-ws ou starlette testclient
-        pass  # WebSocket testing requires specialized testing setup
+        pass
 
     async def test_websocket_auth_required_without_token(self):
         """WebSocket rejeita conexao sem token quando AUTH_REQUIRED=true"""

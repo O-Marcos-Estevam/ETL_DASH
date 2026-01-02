@@ -24,17 +24,6 @@ def mock_sistema_service():
     """Mock do SistemaService"""
     from models.sistema import Sistema
 
-    sistemas = {
-        "maps": Sistema(
-            id="maps",
-            nome="MAPS",
-            descricao="Sistema MAPS",
-            icone="Map",
-            ativo=True,
-            opcoes={"excel": True, "pdf": True}
-        )
-    }
-
     service = MagicMock()
     service.to_dict.return_value = {
         "maps": {
@@ -51,42 +40,17 @@ def mock_sistema_service():
     return service
 
 
-@pytest.fixture
-def mock_auth():
-    """Mock das dependencias de autenticacao"""
-    from auth.models import UserInDB
-
-    admin_user = UserInDB(
-        username="admin",
-        hashed_password="hash",
-        role="admin",
-        disabled=False
-    )
-
-    viewer_user = UserInDB(
-        username="viewer",
-        hashed_password="hash",
-        role="viewer",
-        disabled=False
-    )
-
-    return admin_user, viewer_user
-
-
 @pytest.mark.asyncio
 class TestConfigEndpoints:
     """Testes para endpoints de config"""
 
-    async def test_get_config(self, mock_config_service, mock_sistema_service, mock_auth):
+    async def test_get_config(self, disable_auth, mock_config_service, mock_sistema_service):
         """GET /api/config retorna config combinada"""
         from httpx import AsyncClient, ASGITransport
-
-        admin_user, _ = mock_auth
+        from app import app
 
         with patch("routers.config.get_config_service", return_value=mock_config_service), \
-             patch("routers.config.get_sistema_service", return_value=mock_sistema_service), \
-             patch("routers.config.require_viewer", return_value=admin_user):
-            from app import app
+             patch("routers.config.get_sistema_service", return_value=mock_sistema_service):
             transport = ASGITransport(app=app)
 
             async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -97,16 +61,13 @@ class TestConfigEndpoints:
             assert "sistemas" in data
             assert "paths" in data
 
-    async def test_get_config_includes_periodo(self, mock_config_service, mock_sistema_service, mock_auth):
+    async def test_get_config_includes_periodo(self, disable_auth, mock_config_service, mock_sistema_service):
         """GET /api/config inclui periodo padrao"""
         from httpx import AsyncClient, ASGITransport
-
-        admin_user, _ = mock_auth
+        from app import app
 
         with patch("routers.config.get_config_service", return_value=mock_config_service), \
-             patch("routers.config.get_sistema_service", return_value=mock_sistema_service), \
-             patch("routers.config.require_viewer", return_value=admin_user):
-            from app import app
+             patch("routers.config.get_sistema_service", return_value=mock_sistema_service):
             transport = ASGITransport(app=app)
 
             async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -116,16 +77,13 @@ class TestConfigEndpoints:
             assert "periodo" in data
             assert data["periodo"]["usarD1Anbima"] is True
 
-    async def test_update_config(self, mock_config_service, mock_sistema_service, mock_auth):
+    async def test_update_config(self, disable_auth, mock_config_service, mock_sistema_service):
         """POST /api/config salva configuracao"""
         from httpx import AsyncClient, ASGITransport
-
-        admin_user, _ = mock_auth
+        from app import app
 
         with patch("routers.config.get_config_service", return_value=mock_config_service), \
-             patch("routers.config.get_sistema_service", return_value=mock_sistema_service), \
-             patch("routers.config.require_admin", return_value=admin_user):
-            from app import app
+             patch("routers.config.get_sistema_service", return_value=mock_sistema_service):
             transport = ASGITransport(app=app)
 
             async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -140,17 +98,15 @@ class TestConfigEndpoints:
             assert response.status_code == 200
             mock_config_service.save_credentials.assert_called_once()
 
-    async def test_update_config_failure(self, mock_config_service, mock_sistema_service, mock_auth):
+    async def test_update_config_failure(self, disable_auth, mock_config_service, mock_sistema_service):
         """POST /api/config retorna erro em falha"""
         from httpx import AsyncClient, ASGITransport
+        from app import app
 
-        admin_user, _ = mock_auth
         mock_config_service.save_credentials.return_value = False
 
         with patch("routers.config.get_config_service", return_value=mock_config_service), \
-             patch("routers.config.get_sistema_service", return_value=mock_sistema_service), \
-             patch("routers.config.require_admin", return_value=admin_user):
-            from app import app
+             patch("routers.config.get_sistema_service", return_value=mock_sistema_service):
             transport = ASGITransport(app=app)
 
             async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -161,16 +117,13 @@ class TestConfigEndpoints:
 
             assert response.status_code == 500
 
-    async def test_update_config_updates_sistemas(self, mock_config_service, mock_sistema_service, mock_auth):
+    async def test_update_config_updates_sistemas(self, disable_auth, mock_config_service, mock_sistema_service):
         """POST /api/config atualiza estado dos sistemas"""
         from httpx import AsyncClient, ASGITransport
-
-        admin_user, _ = mock_auth
+        from app import app
 
         with patch("routers.config.get_config_service", return_value=mock_config_service), \
-             patch("routers.config.get_sistema_service", return_value=mock_sistema_service), \
-             patch("routers.config.require_admin", return_value=admin_user):
-            from app import app
+             patch("routers.config.get_sistema_service", return_value=mock_sistema_service):
             transport = ASGITransport(app=app)
 
             async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -192,15 +145,12 @@ class TestConfigEndpoints:
 class TestPathsEndpoint:
     """Testes para endpoint de paths"""
 
-    async def test_get_paths(self, mock_config_service, mock_auth):
+    async def test_get_paths(self, disable_auth, mock_config_service):
         """GET /api/config/paths retorna paths"""
         from httpx import AsyncClient, ASGITransport
+        from app import app
 
-        admin_user, _ = mock_auth
-
-        with patch("routers.config.get_config_service", return_value=mock_config_service), \
-             patch("routers.config.require_viewer", return_value=admin_user):
-            from app import app
+        with patch("routers.config.get_config_service", return_value=mock_config_service):
             transport = ASGITransport(app=app)
 
             async with AsyncClient(transport=transport, base_url="http://test") as client:
