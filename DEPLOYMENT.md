@@ -2,7 +2,7 @@
 
 Este guia explica como fazer deploy do ETL Dashboard em um VPS com AAPanel e Apache.
 
-**Dominio configurado:** `bolaoamericano.com.br`
+**Dominio configurado:** `etl.trackingsystem.com.br`
 
 ---
 
@@ -74,10 +74,10 @@ Aguarde a propagacao DNS (pode levar ate 24h, geralmente minutos).
 cd /www/wwwroot/
 
 # Clonar repositorio
-git clone https://github.com/SEU_USUARIO/SEU_REPO.git bolaoamericano.com.br
+git clone https://github.com/SEU_USUARIO/SEU_REPO.git etl.trackingsystem.com.br
 
 # Entrar no diretorio
-cd bolaoamericano.com.br
+cd etl.trackingsystem.com.br
 ```
 
 ---
@@ -110,10 +110,10 @@ ETL_MASTER_KEY=sua_chave_master_gerada_pelo_script
 AUTH_REQUIRED=true
 
 # CORS
-ETL_CORS_ORIGINS=https://bolaoamericano.com.br,https://www.bolaoamericano.com.br
+ETL_CORS_ORIGINS=https://etl.trackingsystem.com.br,https://www.etl.trackingsystem.com.br
 
 # Frontend
-VITE_API_URL=https://bolaoamericano.com.br/api
+VITE_API_URL=https://etl.trackingsystem.com.br/api
 ```
 
 ---
@@ -138,9 +138,9 @@ docker compose logs -f
 ### 6.1 Adicionar Site
 1. AAPanel > **Website** > **Add site**
 2. Preencha:
-   - Domain: `bolaoamericano.com.br`
+   - Domain: `etl.trackingsystem.com.br`
    - Webserver: Apache
-   - Root directory: `/www/wwwroot/bolaoamericano.com.br/web`
+   - Root directory: `/www/wwwroot/etl.trackingsystem.com.br/web`
 3. Clique em **Submit**
 
 ### 6.2 Configurar Apache VirtualHost
@@ -152,7 +152,7 @@ docker compose logs -f
 ### 6.3 Ativar SSL/HTTPS
 1. AAPanel > **Website** > clique no site > **SSL**
 2. Selecione **Let's Encrypt**
-3. Marque `bolaoamericano.com.br` e `www.bolaoamericano.com.br`
+3. Marque `etl.trackingsystem.com.br` e `www.etl.trackingsystem.com.br`
 4. Clique em **Apply**
 5. Ative **Force HTTPS**
 
@@ -162,17 +162,17 @@ docker compose logs -f
 
 ### 7.1 Copiar .htaccess
 ```bash
-cp deploy/.htaccess /www/wwwroot/bolaoamericano.com.br/web/
+cp deploy/.htaccess /www/wwwroot/etl.trackingsystem.com.br/web/
 ```
 
 ### 7.2 Criar usuario admin
 ```bash
-cd /www/wwwroot/bolaoamericano.com.br
+cd /www/wwwroot/etl.trackingsystem.com.br
 docker compose exec backend python scripts/create_admin.py --username admin --password SuaSenhaSegura123!
 ```
 
 ### 7.3 Testar
-1. Acesse https://bolaoamericano.com.br
+1. Acesse https://etl.trackingsystem.com.br
 2. Faca login com as credenciais criadas
 3. Teste as funcionalidades do ETL
 
@@ -200,7 +200,7 @@ docker compose up -d --build
 
 ### Atualizacao
 ```bash
-cd /www/wwwroot/bolaoamericano.com.br
+cd /www/wwwroot/etl.trackingsystem.com.br
 
 # Baixar atualizacoes
 git pull
@@ -212,7 +212,7 @@ docker compose up -d --build
 ### Backup
 ```bash
 # Backup dos dados
-cp -r /www/wwwroot/bolaoamericano.com.br/data /backup/etl-$(date +%Y%m%d)
+cp -r /www/wwwroot/etl.trackingsystem.com.br/data /backup/etl-$(date +%Y%m%d)
 
 # Backup do banco SQLite
 docker compose exec backend cp /app/data/tasks.db /app/data/tasks.db.backup
@@ -265,10 +265,10 @@ docker compose exec backend python scripts/create_admin.py --username admin --pa
 **Solucao:**
 ```bash
 # Verificar se web/ existe
-ls -la /www/wwwroot/bolaoamericano.com.br/web/
+ls -la /www/wwwroot/etl.trackingsystem.com.br/web/
 
 # Copiar htaccess
-cp deploy/.htaccess /www/wwwroot/bolaoamericano.com.br/web/
+cp deploy/.htaccess /www/wwwroot/etl.trackingsystem.com.br/web/
 ```
 
 ---
@@ -277,14 +277,14 @@ cp deploy/.htaccess /www/wwwroot/bolaoamericano.com.br/web/
 
 ### UptimeRobot (gratuito)
 1. Crie conta em https://uptimerobot.com
-2. Adicione monitor HTTP(s) para `https://bolaoamericano.com.br/api/health`
+2. Adicione monitor HTTP(s) para `https://etl.trackingsystem.com.br/api/health`
 3. Configure alertas por email/Telegram
 
 ### Logs
 ```bash
 # Logs do Apache
-tail -f /www/wwwlogs/bolaoamericano.com.br-error.log
-tail -f /www/wwwlogs/bolaoamericano.com.br-access.log
+tail -f /www/wwwlogs/etl.trackingsystem.com.br-error.log
+tail -f /www/wwwlogs/etl.trackingsystem.com.br-access.log
 
 # Logs do Backend
 docker compose logs -f backend
@@ -305,7 +305,7 @@ Configure no AAPanel > Security > Firewall:
 Configure no AAPanel > Cron > Add Task:
 ```bash
 # Diario as 3h
-0 3 * * * tar -czf /backup/etl-$(date +\%Y\%m\%d).tar.gz /www/wwwroot/bolaoamericano.com.br/data
+0 3 * * * tar -czf /backup/etl-$(date +\%Y\%m\%d).tar.gz /www/wwwroot/etl.trackingsystem.com.br/data
 ```
 
 ---
