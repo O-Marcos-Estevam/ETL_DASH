@@ -164,12 +164,12 @@ class TestMergeCredentials:
         assert result["email"] == "user@test.com"
 
     def test_merge_empty_password_preserved(self, service):
-        """Merge preserva quando novo password e vazio"""
+        """Merge preserva senha existente quando novo password e vazio"""
         existing = {"password": "real_pass"}
         new = {"password": ""}
         result = service._merge_credentials(existing, new)
-        # Vazio nao e "********", entao mantem como esta
-        assert result["password"] == ""
+        # Senha vazia nao substitui senha real (comportamento de seguranca)
+        assert result["password"] == "real_pass"
 
 
 class TestGetSystemCredentials:

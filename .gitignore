@@ -36,6 +36,15 @@ yarn-error.log*
 
 # Security / Local Config
 config/credentials.json
+config/credentials.encrypted.json
+config/.master_key
+config/credentials.backup.*.json
+*.key
+
+# Environment secrets
+.env
+.env.local
+.env.production
 
 # Shortcuts & misc
 *.lnk
