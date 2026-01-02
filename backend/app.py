@@ -49,6 +49,20 @@ app.add_middleware(
 )
 
 # -------------------------------------------------------------------------
+# Servir Frontend Estatico (modo producao/portatil)
+# -------------------------------------------------------------------------
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Montar arquivos estaticos se pasta web/ existir
+if settings.WEB_DIR.exists() and (settings.WEB_DIR / "index.html").exists():
+    # Servir assets
+    if (settings.WEB_DIR / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=settings.WEB_DIR / "assets"), name="assets")
+    
+    logger.info(f"Frontend estatico disponivel em: {settings.WEB_DIR}")
+
+# -------------------------------------------------------------------------
 # WebSocket Manager (Moved to class for clarity)
 # -------------------------------------------------------------------------
 class ConnectionManager:
@@ -144,6 +158,23 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
+# Rota catch-all para servir index.html (SPA routing)
+# Deve vir depois de todas as outras rotas
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    """Serve index.html para rotas do SPA (React Router)"""
+    # Ignorar rotas de API e WebSocket
+    if full_path.startswith("api/") or full_path.startswith("ws"):
+        return {"detail": "Not found"}
+    
+    # Servir index.html se existir
+    index_path = settings.WEB_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    
+    # Em desenvolvimento, redirecionar para frontend separado
+    return {"message": "Frontend nao encontrado. Execute 'npm run build' ou use http://localhost:4000"}
+
 def check_port_available(host: str, port: int) -> bool:
     """Verifica se a porta esta disponivel tentando fazer bind"""
     import socket
@@ -161,6 +192,7 @@ def check_port_available(host: str, port: int) -> bool:
 
 if __name__ == "__main__":
     import uvicorn
+    import sys
     
     # Verificar se porta esta disponivel
     if not check_port_available(settings.HOST, settings.PORT):
@@ -172,13 +204,25 @@ if __name__ == "__main__":
         if not check_port_available(settings.HOST, settings.PORT):
             logger.error(f"Porta {settings.PORT} tambem esta em uso!")
             logger.error("Por favor, encerre processos Python ou configure outra porta via ETL_PORT")
-            import sys
             sys.exit(1)
     
     logger.info(f"Iniciando servidor em {settings.HOST}:{settings.PORT}")
-    uvicorn.run(
-        "app:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG  # Apenas em desenvolvimento
-    )
+    
+    # Em modo PyInstaller (frozen), passar objeto app diretamente
+    # Em modo desenvolvimento, usar string para permitir reload
+    if getattr(sys, 'frozen', False):
+        # Modo executavel - passar objeto app diretamente
+        uvicorn.run(
+            app,
+            host=settings.HOST,
+            port=settings.PORT,
+            log_level="info"
+        )
+    else:
+        # Modo desenvolvimento - usar string para hot reload
+        uvicorn.run(
+            "app:app",
+            host=settings.HOST,
+            port=settings.PORT,
+            reload=settings.DEBUG
+        )

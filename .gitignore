@@ -40,3 +40,13 @@ config/credentials.json
 # Shortcuts & misc
 *.lnk
 V2/
+
+# Build artifacts
+dist/
+build/pyinstaller/build/
+build/pyinstaller/dist/
+*.exe
+*.spec.bak
+
+# Web build (frontend production build)
+web/

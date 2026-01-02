@@ -5,6 +5,8 @@ import path from "path"
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Base path relativo para funcionar em executavel portatil
+  base: './',
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -18,6 +20,9 @@ export default defineConfig({
     port: 4000,
   },
   build: {
+    // Output para pasta web/ na raiz (para servir pelo backend)
+    outDir: '../web',
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         manualChunks: {
