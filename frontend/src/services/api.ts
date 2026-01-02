@@ -3,7 +3,7 @@
  */
 import type { ConfiguracaoETL, Sistema, ApiResponse } from '@/types/etl';
 
-const API_BASE = 'http://localhost:4001/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 const DEFAULT_TIMEOUT = 5000;
 
 // Base request function with timeout
