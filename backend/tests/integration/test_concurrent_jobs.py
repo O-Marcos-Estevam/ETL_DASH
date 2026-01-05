@@ -499,3 +499,305 @@ class TestPoolManagerJobExecution:
         result = pool.cancel_job(99999)
 
         assert result is False
+
+
+@pytest.mark.asyncio
+class TestPoolManagerBroadcast:
+    """Tests for broadcast helpers in pool manager"""
+
+    async def test_broadcast_log_success(self):
+        """Broadcast log calls ws_manager"""
+        from services.pool import JobPoolManager
+        import services.state as state_service
+
+        mock_manager = MagicMock()
+        mock_manager.broadcast_log = AsyncMock()
+        original = state_service.ws_manager
+        state_service.ws_manager = mock_manager
+
+        try:
+            pool = JobPoolManager(max_workers=2)
+            log_entry = {"level": "INFO", "message": "Test"}
+
+            await pool._broadcast_log(log_entry)
+
+            mock_manager.broadcast_log.assert_called_once_with(log_entry)
+        finally:
+            state_service.ws_manager = original
+
+    async def test_broadcast_log_handles_error(self):
+        """Broadcast log handles exceptions gracefully"""
+        from services.pool import JobPoolManager
+        import services.state as state_service
+
+        mock_manager = MagicMock()
+        mock_manager.broadcast_log = AsyncMock(side_effect=Exception("WS Error"))
+        original = state_service.ws_manager
+        state_service.ws_manager = mock_manager
+
+        try:
+            pool = JobPoolManager(max_workers=2)
+            # Should not raise
+            await pool._broadcast_log({"level": "INFO"})
+        finally:
+            state_service.ws_manager = original
+
+    async def test_broadcast_log_no_manager(self):
+        """Broadcast log handles missing ws_manager"""
+        from services.pool import JobPoolManager
+        import services.state as state_service
+
+        original = state_service.ws_manager
+        state_service.ws_manager = None
+
+        try:
+            pool = JobPoolManager(max_workers=2)
+            # Should not raise
+            await pool._broadcast_log({"level": "INFO"})
+        finally:
+            state_service.ws_manager = original
+
+    async def test_broadcast_status_success(self):
+        """Broadcast status calls ws_manager"""
+        from services.pool import JobPoolManager
+        import services.state as state_service
+
+        mock_manager = MagicMock()
+        mock_manager.broadcast_status = AsyncMock()
+        original = state_service.ws_manager
+        state_service.ws_manager = mock_manager
+
+        try:
+            pool = JobPoolManager(max_workers=2)
+
+            await pool._broadcast_status("maps", "RUNNING", 50, "Processing")
+
+            mock_manager.broadcast_status.assert_called_once_with(
+                "maps", "RUNNING", 50, "Processing"
+            )
+        finally:
+            state_service.ws_manager = original
+
+    async def test_broadcast_status_handles_error(self):
+        """Broadcast status handles exceptions gracefully"""
+        from services.pool import JobPoolManager
+        import services.state as state_service
+
+        mock_manager = MagicMock()
+        mock_manager.broadcast_status = AsyncMock(side_effect=Exception("Error"))
+        original = state_service.ws_manager
+        state_service.ws_manager = mock_manager
+
+        try:
+            pool = JobPoolManager(max_workers=2)
+            # Should not raise
+            await pool._broadcast_status("maps", "RUNNING", 50, "Processing")
+        finally:
+            state_service.ws_manager = original
+
+    async def test_broadcast_job_complete_success(self):
+        """Broadcast job_complete calls ws_manager"""
+        from services.pool import JobPoolManager
+        import services.state as state_service
+
+        mock_manager = MagicMock()
+        mock_manager.broadcast_job_complete = AsyncMock()
+        original = state_service.ws_manager
+        state_service.ws_manager = mock_manager
+
+        try:
+            pool = JobPoolManager(max_workers=2)
+
+            await pool._broadcast_job_complete(123, "completed", 60)
+
+            mock_manager.broadcast_job_complete.assert_called_once_with(123, "completed", 60)
+        finally:
+            state_service.ws_manager = original
+
+    async def test_broadcast_job_complete_handles_error(self):
+        """Broadcast job_complete handles exceptions gracefully"""
+        from services.pool import JobPoolManager
+        import services.state as state_service
+
+        mock_manager = MagicMock()
+        mock_manager.broadcast_job_complete = AsyncMock(side_effect=Exception("Error"))
+        original = state_service.ws_manager
+        state_service.ws_manager = mock_manager
+
+        try:
+            pool = JobPoolManager(max_workers=2)
+            # Should not raise
+            await pool._broadcast_job_complete(123, "completed", 60)
+        finally:
+            state_service.ws_manager = original
+
+
+@pytest.mark.asyncio
+class TestPoolManagerSlotStatus:
+    """Tests for slot status enum"""
+
+    def test_slot_status_values(self):
+        """SlotStatus has correct values"""
+        from services.pool import SlotStatus
+
+        assert SlotStatus.IDLE.value == "idle"
+        assert SlotStatus.RUNNING.value == "running"
+        assert SlotStatus.ERROR.value == "error"
+
+    def test_worker_slot_defaults(self):
+        """WorkerSlot has correct defaults"""
+        from services.pool import WorkerSlot, SlotStatus
+
+        slot = WorkerSlot(slot_id=0)
+
+        assert slot.slot_id == 0
+        assert slot.status == SlotStatus.IDLE
+        assert slot.current_job_id is None
+        assert slot.executor is None
+        assert slot.task is None
+        assert slot.started_at is None
+
+
+@pytest.mark.asyncio
+class TestPoolManagerSingleton:
+    """Tests for pool manager singleton functions"""
+
+    def test_get_pool_manager_none_initially(self):
+        """get_pool_manager returns None initially"""
+        from services.pool import get_pool_manager
+        import services.pool as pool_module
+
+        # Reset singleton
+        pool_module._pool_instance = None
+
+        result = get_pool_manager()
+        assert result is None
+
+    def test_create_pool_manager(self):
+        """create_pool_manager creates and returns instance"""
+        from services.pool import create_pool_manager, get_pool_manager
+        import services.pool as pool_module
+
+        # Reset singleton
+        pool_module._pool_instance = None
+
+        pool = create_pool_manager(max_workers=3, poll_interval=1.0)
+
+        assert pool.max_workers == 3
+        assert pool.poll_interval == 1.0
+        assert get_pool_manager() is pool
+
+    def test_create_pool_manager_overwrites(self):
+        """create_pool_manager overwrites existing instance"""
+        from services.pool import create_pool_manager, get_pool_manager
+
+        pool1 = create_pool_manager(max_workers=2)
+        pool2 = create_pool_manager(max_workers=4)
+
+        assert get_pool_manager() is pool2
+        assert pool2.max_workers == 4
+
+
+@pytest.mark.asyncio
+class TestPoolManagerStartStop:
+    """Tests for start/stop lifecycle"""
+
+    async def test_start_already_running(self):
+        """Starting already running pool logs warning"""
+        from services.pool import JobPoolManager
+
+        pool = JobPoolManager(max_workers=2, poll_interval=0.1)
+        await pool.start()
+
+        try:
+            # Starting again should not error
+            await pool.start()
+            assert pool.running
+        finally:
+            await pool.stop()
+
+    async def test_stop_cancels_tasks(self):
+        """Stop cancels coordinator and cleanup tasks"""
+        from services.pool import JobPoolManager
+
+        pool = JobPoolManager(max_workers=2, poll_interval=0.1)
+        await pool.start()
+
+        assert pool._coordinator_task is not None
+        assert pool._cleanup_task is not None
+
+        await pool.stop()
+
+        assert not pool.running
+
+    async def test_stop_cancels_running_jobs(self):
+        """Stop cancels any running jobs"""
+        from services.pool import JobPoolManager, SlotStatus
+
+        pool = JobPoolManager(max_workers=2, poll_interval=0.1)
+
+        # Manually set up a running slot with mock executor
+        pool.slots[0].status = SlotStatus.RUNNING
+        pool.slots[0].executor = MagicMock()
+        pool.slots[0].executor.cancel = MagicMock()
+        pool.slots[0].task = asyncio.create_task(asyncio.sleep(100))
+
+        pool.running = True
+        await pool.stop()
+
+        pool.slots[0].executor.cancel.assert_called_once()
+
+
+@pytest.mark.asyncio
+class TestPoolManagerEdgeCases:
+    """Tests for edge cases and error handling"""
+
+    async def test_get_status_with_running_jobs(self):
+        """Status correctly shows running job info"""
+        from services.pool import JobPoolManager, SlotStatus
+        from datetime import datetime
+
+        pool = JobPoolManager(max_workers=3)
+
+        # Set up slots with different states
+        pool.slots[0].status = SlotStatus.RUNNING
+        pool.slots[0].current_job_id = 123
+        pool.slots[0].started_at = datetime.now()
+
+        pool.slots[1].status = SlotStatus.IDLE
+
+        pool.slots[2].status = SlotStatus.ERROR
+
+        status = pool.get_status()
+
+        assert status["max_workers"] == 3
+        assert status["active_count"] == 1  # Only RUNNING counts as active
+        assert status["idle_count"] == 1
+
+        # Find the running slot
+        running_slot = next(s for s in status["slots"] if s["slot_id"] == 0)
+        assert running_slot["status"] == "running"
+        assert running_slot["job_id"] == 123
+        assert running_slot["started_at"] is not None
+
+    async def test_cancel_job_in_correct_slot(self):
+        """Cancel finds job in correct slot"""
+        from services.pool import JobPoolManager, SlotStatus
+
+        pool = JobPoolManager(max_workers=3)
+
+        # Set up multiple running slots
+        for i, job_id in enumerate([100, 200, 300]):
+            pool.slots[i].status = SlotStatus.RUNNING
+            pool.slots[i].current_job_id = job_id
+            pool.slots[i].executor = MagicMock()
+            pool.slots[i].executor.cancel = MagicMock()
+
+        # Cancel job 200 (in slot 1)
+        result = pool.cancel_job(200)
+
+        assert result is True
+        # Only slot 1's executor should be cancelled
+        pool.slots[0].executor.cancel.assert_not_called()
+        pool.slots[1].executor.cancel.assert_called_once()
+        pool.slots[2].executor.cancel.assert_not_called()

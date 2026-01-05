@@ -282,3 +282,181 @@ class TestExecutorCancel:
         # Nao deve lancar excecao
         executor.cancel()
         assert executor._cancelled is True
+
+    def test_cancel_finished_process(self):
+        """Cancel nao termina processo ja finalizado"""
+        executor = ETLExecutor()
+        mock_process = MagicMock()
+        mock_process.returncode = 0  # Processo ja terminou
+        executor.process = mock_process
+
+        executor.cancel()
+
+        # terminate nao deve ser chamado se processo ja terminou
+        mock_process.terminate.assert_not_called()
+        assert executor._cancelled is True
+
+
+class TestExecutorSlotId:
+    """Testes para slot_id"""
+
+    def test_default_slot_id(self):
+        """Slot ID padrao e 0"""
+        executor = ETLExecutor()
+        assert executor.slot_id == 0
+
+    def test_custom_slot_id(self):
+        """Slot ID customizado"""
+        executor = ETLExecutor(slot_id=5)
+        assert executor.slot_id == 5
+
+
+class TestGetExecutor:
+    """Testes para funcao get_executor"""
+
+    def test_single_mode_returns_singleton(self):
+        """Modo single retorna singleton"""
+        from services.executor import get_executor
+        import services.executor as executor_module
+
+        with patch('config.settings') as mock_settings:
+            mock_settings.MAX_CONCURRENT_JOBS = 1
+            # Reset singleton
+            executor_module._executor_instance = None
+
+            exec1 = get_executor()
+            exec2 = get_executor()
+
+            assert exec1 is exec2
+
+    def test_pool_mode_returns_new_instance(self):
+        """Modo pool retorna nova instancia"""
+        from services.executor import get_executor
+
+        with patch('config.settings') as mock_settings:
+            mock_settings.MAX_CONCURRENT_JOBS = 4
+
+            exec1 = get_executor(slot_id=0)
+            exec2 = get_executor(slot_id=1)
+
+            assert exec1 is not exec2
+            assert exec1.slot_id == 0
+            assert exec2.slot_id == 1
+
+
+@pytest.mark.asyncio
+class TestExecutorAsync:
+    """Testes assincronos para executor"""
+
+    async def test_send_log_async_callback(self):
+        """_send_log funciona com callback async"""
+        executor = ETLExecutor()
+        received_logs = []
+
+        async def log_callback(entry):
+            received_logs.append(entry)
+
+        await executor._send_log(log_callback, "INFO", "TEST", "Test message")
+
+        assert len(received_logs) == 1
+        assert received_logs[0]["level"] == "INFO"
+        assert received_logs[0]["sistema"] == "TEST"
+        assert received_logs[0]["mensagem"] == "Test message"
+        assert "timestamp" in received_logs[0]
+
+    async def test_send_log_sync_callback(self):
+        """_send_log funciona com callback sync"""
+        executor = ETLExecutor()
+        received_logs = []
+
+        def log_callback(entry):
+            received_logs.append(entry)
+
+        await executor._send_log(log_callback, "ERROR", "SYSTEM", "Error message")
+
+        assert len(received_logs) == 1
+        assert received_logs[0]["level"] == "ERROR"
+
+    async def test_send_log_callback_error_handled(self):
+        """_send_log trata erro no callback"""
+        executor = ETLExecutor()
+
+        async def failing_callback(entry):
+            raise Exception("Callback failed")
+
+        # Nao deve lancar excecao
+        await executor._send_log(failing_callback, "INFO", "TEST", "Message")
+
+    async def test_execute_script_not_found(self):
+        """Execute retorna False se script nao existe"""
+        executor = ETLExecutor()
+        executor.main_script = "/nonexistent/path/main.py"
+
+        logs = []
+        async def log_callback(entry):
+            logs.append(entry)
+
+        result = await executor.execute({"sistemas": ["test"]}, log_callback)
+
+        assert result is False
+        # Deve ter log de erro
+        error_logs = [l for l in logs if l["level"] == "ERROR"]
+        assert len(error_logs) > 0
+
+    async def test_execute_already_running_single_mode(self):
+        """Execute lanca erro se ja ha processo rodando (single mode)"""
+        executor = ETLExecutor()
+        mock_process = MagicMock()
+        mock_process.returncode = None
+        executor.process = mock_process
+
+        async def log_callback(entry):
+            pass
+
+        with patch('config.settings') as mock_settings:
+            mock_settings.MAX_CONCURRENT_JOBS = 1
+
+            with pytest.raises(Exception) as exc_info:
+                await executor.execute({"sistemas": ["test"]}, log_callback)
+
+            assert "Ja existe um processo em execucao" in str(exc_info.value)
+
+    async def test_execute_allowed_in_pool_mode(self):
+        """Execute permitido em pool mode mesmo com processo anterior"""
+        executor = ETLExecutor()
+        # Simular processo anterior (nao deve bloquear em pool mode)
+        mock_process = MagicMock()
+        mock_process.returncode = None
+        executor.process = mock_process
+        # Script inexistente para falhar rapido
+        executor.main_script = "/nonexistent/path/main.py"
+
+        logs = []
+        async def log_callback(entry):
+            logs.append(entry)
+
+        with patch('config.settings') as mock_settings:
+            mock_settings.MAX_CONCURRENT_JOBS = 4
+
+            # Nao deve lancar excecao, mas retorna False porque script nao existe
+            result = await executor.execute({"sistemas": ["test"]}, log_callback)
+            assert result is False
+
+
+class TestUtcNow:
+    """Testes para funcao utc_now"""
+
+    def test_utc_now_format(self):
+        """utc_now retorna formato ISO"""
+        from services.executor import utc_now
+
+        result = utc_now()
+
+        # Deve ser string
+        assert isinstance(result, str)
+        # Deve ter formato ISO (YYYY-MM-DDTHH:MM:SS.mmmmmm)
+        assert "T" in result
+        # Deve ser parseavel
+        from datetime import datetime
+        parsed = datetime.fromisoformat(result)
+        assert parsed is not None
