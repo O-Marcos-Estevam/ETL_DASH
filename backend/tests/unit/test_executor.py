@@ -396,7 +396,7 @@ class TestExecutorAsync:
         async def log_callback(entry):
             logs.append(entry)
 
-        result = await executor.execute({"sistemas": ["test"]}, log_callback)
+        result = await executor.execute({"sistemas": ["maps"]}, log_callback)
 
         assert result is False
         # Deve ter log de erro
@@ -417,7 +417,7 @@ class TestExecutorAsync:
             mock_settings.MAX_CONCURRENT_JOBS = 1
 
             with pytest.raises(Exception) as exc_info:
-                await executor.execute({"sistemas": ["test"]}, log_callback)
+                await executor.execute({"sistemas": ["maps"]}, log_callback)
 
             assert "Ja existe um processo em execucao" in str(exc_info.value)
 
@@ -439,7 +439,7 @@ class TestExecutorAsync:
             mock_settings.MAX_CONCURRENT_JOBS = 4
 
             # Nao deve lancar excecao, mas retorna False porque script nao existe
-            result = await executor.execute({"sistemas": ["test"]}, log_callback)
+            result = await executor.execute({"sistemas": ["maps"]}, log_callback)
             assert result is False
 
 

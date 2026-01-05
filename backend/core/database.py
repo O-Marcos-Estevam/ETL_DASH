@@ -184,28 +184,73 @@ def list_jobs(status=None, limit=20, offset=0):
     return [dict(row) for row in rows]
 
 
-def get_next_pending_job():
-    """Retorna proximo job pendente para processamento (se nao houver job rodando)"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+def get_next_pending_job() -> Optional[Dict[str, Any]]:
+    """
+    Atomically acquires next pending job for single-mode processing.
+    Uses BEGIN IMMEDIATE for exclusive locking to prevent race conditions.
+
+    Only acquires if no other job is currently running (single mode constraint).
+
+    Returns:
+        Job dict or None if no pending jobs or if a job is already running
+    """
+    conn = get_connection()
     cursor = conn.cursor()
 
-    # Verificar se nao ha job rodando
-    cursor.execute('SELECT COUNT(*) as count FROM jobs WHERE status = "running"')
-    running = cursor.fetchone()
+    try:
+        # Start exclusive transaction to prevent race conditions
+        cursor.execute("BEGIN IMMEDIATE")
 
-    if running and running['count'] > 0:
-        conn.close()
+        # Check if any job is already running (single mode constraint)
+        cursor.execute('SELECT COUNT(*) FROM jobs WHERE status = "running"')
+        running_count = cursor.fetchone()[0]
+
+        if running_count > 0:
+            cursor.execute("ROLLBACK")
+            return None
+
+        # Find next pending job
+        cursor.execute('''
+            SELECT id FROM jobs
+            WHERE status = "pending"
+            ORDER BY created_at ASC
+            LIMIT 1
+        ''')
+        row = cursor.fetchone()
+
+        if not row:
+            cursor.execute("ROLLBACK")
+            return None
+
+        job_id = row[0]
+        now = datetime.now().isoformat()
+
+        # Atomically mark job as running
+        cursor.execute('''
+            UPDATE jobs
+            SET status = "running",
+                started_at = ?
+            WHERE id = ?
+        ''', (now, job_id))
+
+        # Fetch complete job record
+        cursor.execute('SELECT * FROM jobs WHERE id = ?', (job_id,))
+        job_row = cursor.fetchone()
+
+        cursor.execute("COMMIT")
+
+        if job_row:
+            logger.info(f"[SINGLE] Acquired job #{job_id}")
+            return dict(job_row)
         return None
 
-    # Buscar proximo pendente
-    cursor.execute('SELECT * FROM jobs WHERE status = "pending" ORDER BY created_at ASC LIMIT 1')
-    row = cursor.fetchone()
-    conn.close()
-
-    if row:
-        return dict(row)
-    return None
+    except Exception as e:
+        logger.error(f"[SINGLE] Error acquiring job: {e}")
+        try:
+            cursor.execute("ROLLBACK")
+        except:
+            pass
+        return None
 
 
 # =============================================================================

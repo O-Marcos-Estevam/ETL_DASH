@@ -134,8 +134,7 @@ class BackgroundWorker:
 
         sistemas = params.get("sistemas", [])
 
-        # Marcar job como running
-        database.update_job_status(job_id, "running")
+        # Job is already marked as running by get_next_pending_job() atomically
         start_time = datetime.now()
 
         # Atualizar status dos sistemas

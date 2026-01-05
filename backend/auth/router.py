@@ -2,9 +2,10 @@
 Authentication Router
 
 API endpoints for login, logout, token refresh, and user management.
+Uses HttpOnly cookies for secure token storage (XSS protection).
 """
-from fastapi import APIRouter, HTTPException, Depends, Request, status
-from typing import List
+from fastapi import APIRouter, HTTPException, Depends, Request, Response, Cookie, status
+from typing import List, Optional
 import logging
 
 from .models import (
@@ -30,13 +31,62 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
 
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
+    """
+    Sets HttpOnly cookies for authentication tokens.
+
+    Security features:
+    - HttpOnly: Prevents JavaScript access (XSS protection)
+    - Secure: Only sent over HTTPS (in production)
+    - SameSite: CSRF protection
+    """
+    # Access token cookie (shorter expiry)
+    response.set_cookie(
+        key=auth_settings.ACCESS_TOKEN_COOKIE,
+        value=access_token,
+        max_age=auth_settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=auth_settings.COOKIE_SECURE,
+        samesite=auth_settings.COOKIE_SAMESITE,
+        path=auth_settings.COOKIE_PATH,
+        domain=auth_settings.COOKIE_DOMAIN or None
+    )
+
+    # Refresh token cookie (longer expiry)
+    response.set_cookie(
+        key=auth_settings.REFRESH_TOKEN_COOKIE,
+        value=refresh_token,
+        max_age=auth_settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=auth_settings.COOKIE_SECURE,
+        samesite=auth_settings.COOKIE_SAMESITE,
+        path=auth_settings.COOKIE_PATH,
+        domain=auth_settings.COOKIE_DOMAIN or None
+    )
+
+
+def clear_auth_cookies(response: Response):
+    """Clears authentication cookies on logout."""
+    response.delete_cookie(
+        key=auth_settings.ACCESS_TOKEN_COOKIE,
+        path=auth_settings.COOKIE_PATH,
+        domain=auth_settings.COOKIE_DOMAIN or None
+    )
+    response.delete_cookie(
+        key=auth_settings.REFRESH_TOKEN_COOKIE,
+        path=auth_settings.COOKIE_PATH,
+        domain=auth_settings.COOKIE_DOMAIN or None
+    )
+
+
 @router.post("/login", response_model=LoginResponse)
-async def login(request: Request, login_data: LoginRequest):
+async def login(request: Request, response: Response, login_data: LoginRequest):
     """
     Authenticate user and return JWT tokens.
 
     - Rate limited to 5 attempts per minute per IP
     - Account locks after 5 failed attempts for 15 minutes
+    - Sets HttpOnly cookies for secure token storage
     """
     client_ip = request.client.host if request.client else "unknown"
 
@@ -100,6 +150,9 @@ async def login(request: Request, login_data: LoginRequest):
 
     logger.info(f"Successful login: {login_data.username} from {client_ip}")
 
+    # Set HttpOnly cookies for secure token storage
+    set_auth_cookies(response, access_token, refresh_token)
+
     return LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -116,14 +169,33 @@ async def login(request: Request, login_data: LoginRequest):
 
 
 @router.post("/refresh", response_model=Token)
-async def refresh_token(refresh_data: RefreshTokenRequest):
+async def refresh_token(
+    response: Response,
+    refresh_data: Optional[RefreshTokenRequest] = None,
+    etl_refresh_token: Optional[str] = Cookie(default=None)
+):
     """
     Refresh access token using refresh token.
 
+    - Accepts refresh token from request body OR HttpOnly cookie
     - Validates refresh token
     - Issues new access token and rotates refresh token
+    - Sets new HttpOnly cookies
     """
-    payload = decode_token(refresh_data.refresh_token)
+    # Get refresh token from body or cookie
+    token_to_use = None
+    if refresh_data and refresh_data.refresh_token:
+        token_to_use = refresh_data.refresh_token
+    elif etl_refresh_token:
+        token_to_use = etl_refresh_token
+
+    if not token_to_use:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token required"
+        )
+
+    payload = decode_token(token_to_use)
 
     if not payload or payload.type != "refresh":
         raise HTTPException(
@@ -132,7 +204,7 @@ async def refresh_token(refresh_data: RefreshTokenRequest):
         )
 
     # Verify refresh token is in database and not revoked
-    if not is_refresh_token_valid(refresh_data.refresh_token, payload.user_id):
+    if not is_refresh_token_valid(token_to_use, payload.user_id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token revoked or expired"
@@ -147,7 +219,7 @@ async def refresh_token(refresh_data: RefreshTokenRequest):
         )
 
     # Revoke old refresh token
-    revoke_refresh_token(refresh_data.refresh_token)
+    revoke_refresh_token(token_to_use)
 
     # Create new tokens (token rotation)
     access_token = create_access_token(
@@ -168,6 +240,9 @@ async def refresh_token(refresh_data: RefreshTokenRequest):
         expires_days=auth_settings.REFRESH_TOKEN_EXPIRE_DAYS
     )
 
+    # Set new HttpOnly cookies
+    set_auth_cookies(response, access_token, new_refresh_token)
+
     return Token(
         access_token=access_token,
         refresh_token=new_refresh_token,
@@ -178,23 +253,43 @@ async def refresh_token(refresh_data: RefreshTokenRequest):
 
 @router.post("/logout")
 async def logout(
-    refresh_data: RefreshTokenRequest,
+    response: Response,
+    refresh_data: Optional[RefreshTokenRequest] = None,
+    etl_refresh_token: Optional[str] = Cookie(default=None),
     current_user=Depends(get_current_user)
 ):
     """
-    Logout user by revoking refresh token.
+    Logout user by revoking refresh token and clearing cookies.
+
+    Accepts refresh token from request body OR HttpOnly cookie.
     """
-    revoke_refresh_token(refresh_data.refresh_token)
+    # Get refresh token from body or cookie
+    token_to_revoke = None
+    if refresh_data and refresh_data.refresh_token:
+        token_to_revoke = refresh_data.refresh_token
+    elif etl_refresh_token:
+        token_to_revoke = etl_refresh_token
+
+    if token_to_revoke:
+        revoke_refresh_token(token_to_revoke)
+
+    # Clear HttpOnly cookies
+    clear_auth_cookies(response)
+
     logger.info(f"User logged out: {current_user.username}")
     return {"message": "Successfully logged out"}
 
 
 @router.post("/logout-all")
-async def logout_all_sessions(current_user=Depends(get_current_user)):
+async def logout_all_sessions(response: Response, current_user=Depends(get_current_user)):
     """
-    Logout from all sessions by revoking all refresh tokens.
+    Logout from all sessions by revoking all refresh tokens and clearing cookies.
     """
     revoke_all_user_tokens(current_user.id)
+
+    # Clear HttpOnly cookies for current session
+    clear_auth_cookies(response)
+
     logger.info(f"All sessions logged out for: {current_user.username}")
     return {"message": "Successfully logged out from all sessions"}
 

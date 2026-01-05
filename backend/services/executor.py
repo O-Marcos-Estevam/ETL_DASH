@@ -12,6 +12,67 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
+# Whitelist of valid system identifiers
+VALID_SISTEMAS = frozenset({
+    "amplis_reag",
+    "amplis_master",
+    "maps",
+    "fidc",
+    "qore",
+    "britech",
+    # Add other valid systems as needed
+})
+
+
+def validate_sistema(sistema: str) -> bool:
+    """
+    Validates a sistema identifier against whitelist.
+
+    Args:
+        sistema: Sistema identifier to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    if not sistema or not isinstance(sistema, str):
+        return False
+    # Normalize and check against whitelist
+    normalized = sistema.lower().strip()
+    return normalized in VALID_SISTEMAS
+
+
+def sanitize_sistemas(sistemas: List[str]) -> List[str]:
+    """
+    Sanitizes and validates a list of sistema identifiers.
+
+    Args:
+        sistemas: List of sistema identifiers
+
+    Returns:
+        List of validated sistema identifiers
+
+    Raises:
+        ValueError: If any sistema is invalid
+    """
+    if not sistemas:
+        return []
+
+    validated = []
+    invalid = []
+
+    for sistema in sistemas:
+        normalized = str(sistema).lower().strip()
+        if validate_sistema(normalized):
+            validated.append(normalized)
+        else:
+            invalid.append(sistema)
+
+    if invalid:
+        logger.warning(f"Invalid sistemas rejected: {invalid}")
+        raise ValueError(f"Invalid sistemas: {invalid}. Valid options: {sorted(VALID_SISTEMAS)}")
+
+    return validated
+
 
 def utc_now() -> str:
     """Retorna timestamp ISO atual"""
@@ -84,13 +145,18 @@ class ETLExecutor:
 
         Returns:
             Lista de argumentos para subprocess
+
+        Raises:
+            ValueError: If any sistema identifier is invalid
         """
         cmd = [sys.executable, self.main_script]
 
-        # Sistemas
+        # Sistemas - validate and sanitize against whitelist
         sistemas = params.get("sistemas", [])
         if sistemas:
-            cmd.extend(["--sistemas"] + sistemas)
+            validated_sistemas = sanitize_sistemas(sistemas)
+            if validated_sistemas:
+                cmd.extend(["--sistemas"] + validated_sistemas)
 
         # Datas - converter para formato DD/MM/YYYY
         if params.get("data_inicial"):

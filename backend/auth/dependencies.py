@@ -2,24 +2,31 @@
 FastAPI Authentication Dependencies
 
 Dependency injection functions for route protection.
+Supports both Authorization header and HttpOnly cookies.
 """
-from fastapi import Depends, HTTPException, status, WebSocket, Query
+from fastapi import Depends, HTTPException, status, WebSocket, Query, Request, Cookie
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import List
+from typing import List, Optional
 
 from .security import decode_token
 from .database import get_user_by_username
 from .models import UserRole, UserInDB
+from .config import auth_settings
 
-# HTTP Bearer token extractor
-security = HTTPBearer()
+# HTTP Bearer token extractor (auto_error=False to allow cookie fallback)
+security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    etl_access_token: Optional[str] = Cookie(default=None)
 ) -> UserInDB:
     """
     Validate JWT token and return current user.
+
+    Accepts token from:
+    1. Authorization header (Bearer token) - checked first
+    2. HttpOnly cookie (etl_access_token) - fallback
 
     Use as a dependency in protected routes.
 
@@ -27,7 +34,20 @@ async def get_current_user(
         HTTPException: 401 if token is invalid or expired.
         HTTPException: 403 if user is disabled.
     """
-    token = credentials.credentials
+    # Try Authorization header first, then cookie
+    token = None
+    if credentials:
+        token = credentials.credentials
+    elif etl_access_token:
+        token = etl_access_token
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
     payload = decode_token(token)
 
     if not payload or payload.type != "access":
@@ -138,18 +158,26 @@ async def get_ws_user(
 
 
 async def get_optional_user(
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False))
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    etl_access_token: Optional[str] = Cookie(default=None)
 ) -> UserInDB | None:
     """
     Optionally authenticate user if token is provided.
 
+    Accepts token from Authorization header or HttpOnly cookie.
     Returns None if no token or invalid token.
     Useful for endpoints that work with or without auth.
     """
-    if not credentials:
+    # Try Authorization header first, then cookie
+    token = None
+    if credentials:
+        token = credentials.credentials
+    elif etl_access_token:
+        token = etl_access_token
+
+    if not token:
         return None
 
-    token = credentials.credentials
     payload = decode_token(token)
 
     if not payload or payload.type != "access":

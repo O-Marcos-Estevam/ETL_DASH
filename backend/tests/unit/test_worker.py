@@ -114,8 +114,8 @@ class TestBackgroundWorkerProcessJob:
             assert worker.current_job_id is None
 
     @pytest.mark.asyncio
-    async def test_process_job_updates_status_to_running(self, worker, sample_job):
-        """Processa job atualiza status para running"""
+    async def test_process_job_does_not_redundantly_set_running(self, worker, sample_job):
+        """Job status is already set to running atomically by get_next_pending_job"""
         with patch("services.worker.database") as mock_db, \
              patch("services.worker.get_executor") as mock_exec, \
              patch("services.worker.get_sistema_service") as mock_sis, \
@@ -128,7 +128,11 @@ class TestBackgroundWorkerProcessJob:
 
             await worker._process_job(sample_job)
 
-            mock_db.update_job_status.assert_any_call(1, "running")
+            # Verify we don't call update_job_status with "running"
+            # Job is already running via get_next_pending_job atomic operation
+            calls = mock_db.update_job_status.call_args_list
+            running_calls = [c for c in calls if c[0][1] == "running"]
+            assert len(running_calls) == 0, "Should not redundantly set status to running"
 
     @pytest.mark.asyncio
     async def test_process_job_success_updates_completed(self, worker, sample_job):

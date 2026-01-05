@@ -212,12 +212,14 @@ export async function validateStoredTokens(): Promise<boolean> {
 }
 
 // API calls
+// Note: credentials: 'include' ensures HttpOnly cookies are sent with requests
 export async function login(credentials: LoginRequest): Promise<LoginResponse> {
     const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
+        credentials: 'include', // Send and receive HttpOnly cookies
         body: JSON.stringify(credentials),
     });
 
@@ -227,15 +229,15 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
     }
 
     const data: LoginResponse = await response.json();
+    // Store tokens in localStorage as backup for expiry tracking
+    // Primary auth uses HttpOnly cookies (set by server)
     storeTokens(data.access_token, data.refresh_token, data.user);
     return data;
 }
 
 export async function refreshTokens(): Promise<RefreshResponse | null> {
+    // Try localStorage first, but server can also use HttpOnly cookie
     const refreshToken = getRefreshToken();
-    if (!refreshToken) {
-        return null;
-    }
 
     try {
         const response = await fetch(`${API_BASE}/auth/refresh`, {
@@ -243,7 +245,9 @@ export async function refreshTokens(): Promise<RefreshResponse | null> {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ refresh_token: refreshToken }),
+            credentials: 'include', // HttpOnly cookie will be sent automatically
+            // Send body only if we have localStorage token (backward compatibility)
+            body: refreshToken ? JSON.stringify({ refresh_token: refreshToken }) : '{}',
         });
 
         if (!response.ok) {
@@ -253,7 +257,7 @@ export async function refreshTokens(): Promise<RefreshResponse | null> {
 
         const data: RefreshResponse = await response.json();
 
-        // Update stored tokens
+        // Update stored tokens (server also updates HttpOnly cookies)
         const user = getStoredUser();
         if (user) {
             storeTokens(data.access_token, data.refresh_token, user);
@@ -270,20 +274,19 @@ export async function logout(): Promise<void> {
     const accessToken = getAccessToken();
     const refreshToken = getRefreshToken();
 
-    // Best effort - logout on server
-    if (accessToken && refreshToken) {
-        try {
-            await fetch(`${API_BASE}/auth/logout`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ refresh_token: refreshToken }),
-            });
-        } catch {
-            // Ignore errors - clear local tokens anyway
-        }
+    // Best effort - logout on server (clears HttpOnly cookies)
+    try {
+        await fetch(`${API_BASE}/auth/logout`, {
+            method: 'POST',
+            headers: {
+                ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include', // Send HttpOnly cookies for logout
+            body: refreshToken ? JSON.stringify({ refresh_token: refreshToken }) : '{}',
+        });
+    } catch {
+        // Ignore errors - clear local tokens anyway
     }
 
     clearTokens();
@@ -291,15 +294,14 @@ export async function logout(): Promise<void> {
 
 export async function getCurrentUser(): Promise<User | null> {
     const accessToken = getAccessToken();
-    if (!accessToken) {
-        return null;
-    }
 
     try {
         const response = await fetch(`${API_BASE}/auth/me`, {
             headers: {
-                'Authorization': `Bearer ${accessToken}`,
+                // Include Authorization header if we have token (backward compatibility)
+                ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
             },
+            credentials: 'include', // HttpOnly cookie will be sent automatically
         });
 
         if (!response.ok) {
@@ -322,16 +324,14 @@ export async function getCurrentUser(): Promise<User | null> {
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
     const accessToken = getAccessToken();
-    if (!accessToken) {
-        throw new Error('Não autenticado');
-    }
 
     const response = await fetch(`${API_BASE}/auth/change-password`, {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${accessToken}`,
+            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
             'Content-Type': 'application/json',
         },
+        credentials: 'include', // HttpOnly cookie will be sent automatically
         body: JSON.stringify({
             current_password: currentPassword,
             new_password: newPassword,

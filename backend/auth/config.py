@@ -34,6 +34,14 @@ class AuthSettings:
     RATE_LIMIT_API: int = 100
     RATE_LIMIT_WEBSOCKET: int = 10
 
+    # Cookie Configuration (HttpOnly for security)
+    COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "false").lower() == "true"  # True in production (HTTPS)
+    COOKIE_SAMESITE: str = os.getenv("COOKIE_SAMESITE", "lax")  # "lax", "strict", or "none"
+    COOKIE_DOMAIN: str = os.getenv("COOKIE_DOMAIN", "")  # Leave empty for same domain
+    COOKIE_PATH: str = "/"
+    ACCESS_TOKEN_COOKIE: str = "etl_access_token"
+    REFRESH_TOKEN_COOKIE: str = "etl_refresh_token"
+
     @property
     def access_token_expires(self) -> timedelta:
         """Access token expiration timedelta"""
