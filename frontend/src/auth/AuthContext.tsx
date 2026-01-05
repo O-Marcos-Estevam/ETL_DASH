@@ -1,5 +1,10 @@
 /**
  * Authentication Context Provider
+ *
+ * Features:
+ * - JWT token expiration validation on load
+ * - Automatic token refresh before expiry
+ * - Silent expiration handling
  */
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { User, AuthContextType } from '@/types/auth';
@@ -9,8 +14,9 @@ import {
     refreshTokens,
     getCurrentUser,
     getAccessToken,
-    getStoredUser,
     clearTokens,
+    validateStoredTokens,
+    setAuthExpiredCallback,
 } from '@/services/authApi';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -25,48 +31,56 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const [refreshToken, setRefreshToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Initialize auth state from storage
+    // Handle silent token expiration
+    const handleAuthExpired = useCallback(() => {
+        console.log('[AuthContext] Session expired, logging out');
+        setUser(null);
+        setAccessToken(null);
+        setRefreshToken(null);
+        clearTokens();
+    }, []);
+
+    // Register auth expired callback
+    useEffect(() => {
+        setAuthExpiredCallback(handleAuthExpired);
+        return () => setAuthExpiredCallback(null);
+    }, [handleAuthExpired]);
+
+    // Initialize auth state from storage with token validation
     useEffect(() => {
         const initAuth = async () => {
-            const storedToken = getAccessToken();
-            const storedUser = getStoredUser();
+            try {
+                // First, validate stored tokens (handles expiration + auto-refresh)
+                const tokensValid = await validateStoredTokens();
 
-            if (storedToken && storedUser) {
-                // Validate token by fetching current user
+                if (!tokensValid) {
+                    console.log('[AuthContext] No valid tokens found');
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Tokens are valid, get current user
+                const storedToken = getAccessToken();
                 const validUser = await getCurrentUser();
-                if (validUser) {
+
+                if (validUser && storedToken) {
                     setUser(validUser);
                     setAccessToken(storedToken);
+                    console.log('[AuthContext] Session restored for:', validUser.username);
                 } else {
+                    // Token validation passed but user fetch failed
                     clearTokens();
                 }
+            } catch (error) {
+                console.error('[AuthContext] Init error:', error);
+                clearTokens();
+            } finally {
+                setIsLoading(false);
             }
-
-            setIsLoading(false);
         };
 
         initAuth();
     }, []);
-
-    // Auto-refresh token before expiry
-    useEffect(() => {
-        if (!accessToken) return;
-
-        // Refresh 5 minutes before expiry (tokens expire in 30 min)
-        const refreshInterval = setInterval(async () => {
-            const result = await refreshTokens();
-            if (result) {
-                setAccessToken(result.access_token);
-            } else {
-                // Refresh failed, logout
-                setUser(null);
-                setAccessToken(null);
-                setRefreshToken(null);
-            }
-        }, 25 * 60 * 1000); // 25 minutes
-
-        return () => clearInterval(refreshInterval);
-    }, [accessToken]);
 
     const login = useCallback(async (username: string, password: string) => {
         setIsLoading(true);
