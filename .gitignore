@@ -78,3 +78,4 @@ GENERATED_KEY.txt
 # Windows artifacts
 nul
 backend/nul
+frontend/e2e/.auth/user.json

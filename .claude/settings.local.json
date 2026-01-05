@@ -22,7 +22,22 @@
       "Bash(pip install:*)",
       "Bash(npm install:*)",
       "Bash(npm run test:run:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(set \"JWT_SECRET_KEY=test_secret_key_for_development_only_32chars\")",
+      "Bash(set \"ETL_MASTER_KEY=GY9NgdHb92egf2IP6qGTlrKfSvo6DNbWSx0E3U01bZA=\")",
+      "Bash(set \"AUTH_REQUIRED=false\")",
+      "Bash(timeout /t 5)",
+      "Bash(curl:*)",
+      "Bash(ping:*)",
+      "Bash(npx playwright install chromium)",
+      "Bash(npm run test:e2e:*)",
+      "Bash(netstat:*)",
+      "Bash(tasklist:*)",
+      "Bash(taskkill:*)",
+      "Bash(start /b python:*)",
+      "Bash(timeout /t 3)",
+      "Bash(npm run dev:*)"
     ]
   }
 }
