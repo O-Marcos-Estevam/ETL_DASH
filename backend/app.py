@@ -38,16 +38,27 @@ async def lifespan(_app: FastAPI):
     init_auth_tables()
     logger.info("Auth tables inicializadas")
 
+    # Initialize WebSocket manager (supports Redis for distributed mode)
+    from services.distributed_ws import create_ws_manager
+    ws_manager = create_ws_manager()
+    await ws_manager.initialize()
+    state_service.ws_manager = ws_manager
+    logger.info(f"WebSocket manager initialized: distributed={ws_manager.is_distributed}")
+
     # Iniciar worker
     worker = get_worker()
     await worker.start()
-    logger.info("BackgroundWorker iniciado")
+    logger.info(f"BackgroundWorker iniciado: mode={worker.get_status().get('mode', 'single')}")
 
     yield
 
     # Shutdown
     await worker.stop()
     logger.info("BackgroundWorker parado")
+
+    # Shutdown WebSocket manager
+    await ws_manager.shutdown()
+    logger.info("WebSocket manager shutdown complete")
 
 
 # OpenAPI Tags para organizar documentação
@@ -135,73 +146,11 @@ if settings.WEB_DIR.exists() and (settings.WEB_DIR / "index.html").exists():
     logger.info(f"Frontend estatico disponivel em: {settings.WEB_DIR}")
 
 # -------------------------------------------------------------------------
-# WebSocket Manager (Moved to class for clarity)
+# WebSocket Manager
 # -------------------------------------------------------------------------
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-
-    async def broadcast_log(self, log_entry: dict):
-        """Envia log para todos os clientes conectados"""
-        message = {
-            "type": "log",
-            "payload": log_entry
-        }
-        await self._broadcast(message)
-
-    async def broadcast_status(self, sistema_id: str, status: str, progresso: int = 0, mensagem: str = None):
-        """Envia status update de um sistema para todos os clientes"""
-        message = {
-            "type": "status",
-            "payload": {
-                "sistema_id": sistema_id,
-                "status": status,
-                "progresso": progresso,
-                "mensagem": mensagem
-            }
-        }
-        await self._broadcast(message)
-
-    async def broadcast_job_complete(self, job_id: int, status: str, duracao: int = 0):
-        """Envia notificacao de job completo"""
-        message = {
-            "type": "job_complete",
-            "payload": {
-                "job_id": job_id,
-                "status": status,
-                "duracao_segundos": duracao
-            }
-        }
-        await self._broadcast(message)
-
-    async def _broadcast(self, message: dict):
-        disconnect_list = []
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception as e:
-                logger.warning(f"Erro ao enviar mensagem via WebSocket: {e}")
-                disconnect_list.append(connection)
-
-        for conn in disconnect_list:
-            self.disconnect(conn)
-
-    @property
-    def connection_count(self) -> int:
-        """Retorna numero de conexoes ativas"""
-        return len(self.active_connections)
-
-manager = ConnectionManager()
-# Register manager in shared state so other routers can use it
-state_service.ws_manager = manager
+# The WebSocket manager is now created in lifespan() using DistributedConnectionManager
+# which supports both local-only and Redis-distributed modes.
+# Access via state_service.ws_manager after app startup.
 
 # -------------------------------------------------------------------------
 # Routers
@@ -232,7 +181,21 @@ from models.api import HealthResponse
 )
 async def health_check():
     """Retorna status de saúde da API"""
-    return HealthResponse(status="ok", version="2.1.0")
+    return HealthResponse(status="ok", version="2.2.0")
+
+
+@app.get(
+    "/api/ws/stats",
+    tags=["config"],
+    summary="WebSocket Stats",
+    description="Returns WebSocket manager statistics including Redis status."
+)
+async def websocket_stats():
+    """Returns WebSocket manager statistics"""
+    manager = state_service.ws_manager
+    if manager:
+        return manager.get_stats()
+    return {"error": "WebSocket manager not initialized"}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
@@ -270,6 +233,12 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
             return
     elif auth_required and not token:
         await websocket.close(code=4001, reason="Token required")
+        return
+
+    # Get WebSocket manager from shared state
+    manager = state_service.ws_manager
+    if not manager:
+        await websocket.close(code=4000, reason="Service unavailable")
         return
 
     # Connect and handle messages

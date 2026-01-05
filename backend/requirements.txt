@@ -12,3 +12,6 @@ bcrypt==4.1.2
 
 # Encryption
 cryptography>=42.0.0
+
+# Redis (optional - for horizontal scaling with distributed WebSocket)
+redis>=5.0.0

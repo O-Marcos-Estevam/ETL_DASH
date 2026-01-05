@@ -21,7 +21,12 @@ def utc_now() -> str:
 class ETLExecutor:
     """Executor de pipelines ETL via subprocess"""
 
-    def __init__(self):
+    def __init__(self, slot_id: int = 0):
+        """
+        Args:
+            slot_id: Worker slot identifier (for multiprocessing mode)
+        """
+        self.slot_id = slot_id
         self.process: Optional[asyncio.subprocess.Process] = None
         self._cancelled = False
 
@@ -35,7 +40,7 @@ class ETLExecutor:
         self.main_script = os.path.join(self.python_dir, "main.py")
         self.config_path = os.path.join(self.root_dir, "config", "credentials.json")
 
-        logger.info(f"ETLExecutor initialized: root={self.root_dir}")
+        logger.info(f"ETLExecutor initialized: root={self.root_dir}, slot={slot_id}")
 
     def _convert_date_format(self, date_str: str) -> str:
         """
@@ -157,8 +162,12 @@ class ETLExecutor:
         Returns:
             True se sucesso, False se erro
         """
-        if self.process and self.process.returncode is None:
-            raise Exception("Ja existe um processo em execucao")
+        # In single mode (MAX_CONCURRENT_JOBS=1), check for existing process
+        # In pool mode, each slot has its own executor instance
+        from config import settings
+        if settings.MAX_CONCURRENT_JOBS == 1:
+            if self.process and self.process.returncode is None:
+                raise Exception("Ja existe um processo em execucao")
 
         self._cancelled = False
         cmd = self.build_command(params)
@@ -363,13 +372,32 @@ class ETLExecutor:
         return self.process is not None and self.process.returncode is None
 
 
-# Singleton
+# Singleton (for single mode: MAX_CONCURRENT_JOBS=1)
 _executor_instance: Optional[ETLExecutor] = None
 
 
-def get_executor() -> ETLExecutor:
-    """Retorna instancia singleton do ETLExecutor"""
+def get_executor(slot_id: int = 0) -> ETLExecutor:
+    """
+    Returns an ETLExecutor instance.
+
+    - In single mode (MAX_CONCURRENT_JOBS=1): returns singleton
+    - In pool mode (MAX_CONCURRENT_JOBS>1): returns new instance per slot
+
+    Args:
+        slot_id: Worker slot ID (only used in pool mode)
+
+    Returns:
+        ETLExecutor instance
+    """
+    from config import settings
+
     global _executor_instance
-    if _executor_instance is None:
-        _executor_instance = ETLExecutor()
-    return _executor_instance
+
+    if settings.MAX_CONCURRENT_JOBS == 1:
+        # Single mode - return singleton
+        if _executor_instance is None:
+            _executor_instance = ETLExecutor(slot_id=0)
+        return _executor_instance
+    else:
+        # Pool mode - new instance per slot (managed by pool)
+        return ETLExecutor(slot_id=slot_id)

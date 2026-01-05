@@ -81,14 +81,27 @@ async def execute_pipeline(
                 detail="Nenhum sistema selecionado para execucao"
             )
 
-        # Verificar se ja existe job em execucao
-        running_job = database.get_running_job()
-        if running_job:
-            return {
-                "status": "error",
-                "message": f"Ja existe um job em execucao (ID: {running_job['id']})",
-                "job_id": running_job["id"]
-            }
+        # In pool mode, check if there's an available slot
+        # In single mode, check if there's any running job
+        from config import settings
+
+        if settings.MAX_CONCURRENT_JOBS == 1:
+            running_job = database.get_running_job()
+            if running_job:
+                return {
+                    "status": "error",
+                    "message": f"Ja existe um job em execucao (ID: {running_job['id']})",
+                    "job_id": running_job["id"]
+                }
+        else:
+            # Pool mode - check if all slots are busy
+            running_count = database.get_running_jobs_count()
+            if running_count >= settings.MAX_CONCURRENT_JOBS:
+                return {
+                    "status": "queued",
+                    "message": f"Todos os {settings.MAX_CONCURRENT_JOBS} slots estao ocupados. Job sera enfileirado.",
+                    "job_id": -1  # Will be set after creation
+                }
 
         # Criar job no banco
         job_id = database.add_job("etl_pipeline", request.model_dump())
@@ -140,14 +153,17 @@ async def execute_single_system(
                 detail=f"Sistema '{sistema_id}' nao encontrado"
             )
 
-        # Verificar se ja existe job em execucao
-        running_job = database.get_running_job()
-        if running_job:
-            return {
-                "status": "error",
-                "message": f"Ja existe um job em execucao (ID: {running_job['id']})",
-                "job_id": running_job["id"]
-            }
+        # Check for running jobs (same logic as execute_pipeline)
+        from config import settings
+
+        if settings.MAX_CONCURRENT_JOBS == 1:
+            running_job = database.get_running_job()
+            if running_job:
+                return {
+                    "status": "error",
+                    "message": f"Ja existe um job em execucao (ID: {running_job['id']})",
+                    "job_id": running_job["id"]
+                }
 
         # Criar parametros do job
         params = {
@@ -213,10 +229,18 @@ async def cancel_execution(
 
         # Cancelar processo em execucao via worker
         worker = get_worker()
-        worker.cancel_current_job()
+        cancelled = worker.cancel_job(job_id)
 
-        # Atualizar status no banco
-        database.update_job_status(job_id, "cancelled", "Cancelado pelo usuario")
+        if not cancelled:
+            # Job might not be running yet (still pending)
+            if job["status"] == "pending":
+                database.update_job_status(job_id, "cancelled", "Cancelado antes de iniciar")
+            else:
+                # Job not found in worker - update status anyway
+                database.update_job_status(job_id, "cancelled", "Cancelado pelo usuario")
+        else:
+            # Worker handled the cancellation
+            database.update_job_status(job_id, "cancelled", "Cancelado pelo usuario")
 
         # Atualizar status dos sistemas
         service = get_sistema_service()
@@ -290,3 +314,50 @@ async def get_job_status(
         )
 
     return job
+
+
+# ==================== POOL/WORKER STATUS ====================
+
+@router.get("/api/pool/status")
+async def get_pool_status(current_user: UserInDB = Depends(require_viewer)):
+    """
+    Returns status of the worker/pool (ADMIN and VIEWER).
+
+    In single mode: returns current job info
+    In pool mode: returns all slot statuses
+    """
+    worker = get_worker()
+    return worker.get_status()
+
+
+@router.get("/api/pool/metrics")
+async def get_pool_metrics(current_user: UserInDB = Depends(require_viewer)):
+    """
+    Returns execution metrics (ADMIN and VIEWER).
+
+    Includes:
+    - Worker mode (single/pool)
+    - Slots info (if pool mode)
+    - Queue depth
+    - Completed jobs in last 24h
+    """
+    from config import settings
+
+    worker = get_worker()
+    worker_status = worker.get_status()
+
+    metrics = {
+        "mode": worker_status.get("mode", "single"),
+        "max_concurrent_jobs": settings.MAX_CONCURRENT_JOBS,
+        "jobs_pending": database.get_pending_jobs_count(),
+        "jobs_running": database.get_running_jobs_count(),
+        "jobs_completed_24h": database.get_completed_jobs_count(hours=24),
+    }
+
+    # Add pool-specific metrics if in pool mode
+    if worker_status.get("mode") == "pool":
+        metrics["slots_active"] = worker_status.get("active_count", 0)
+        metrics["slots_idle"] = worker_status.get("idle_count", 0)
+        metrics["slots"] = worker_status.get("slots", [])
+
+    return metrics

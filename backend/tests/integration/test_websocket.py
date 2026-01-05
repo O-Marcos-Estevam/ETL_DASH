@@ -10,13 +10,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
 class TestConnectionManager:
-    """Testes para ConnectionManager"""
+    """Testes para DistributedConnectionManager (local mode)"""
 
     @pytest.fixture
     def manager(self):
-        """Fixture do ConnectionManager"""
-        from app import ConnectionManager
-        return ConnectionManager()
+        """Fixture do DistributedConnectionManager"""
+        from services.distributed_ws import DistributedConnectionManager
+        return DistributedConnectionManager()
 
     @pytest.fixture
     def mock_websocket(self):

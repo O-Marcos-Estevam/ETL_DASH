@@ -76,7 +76,24 @@ class Settings:
     LOG_DIR = APP_DIR / "logs"
     LOG_LEVEL = os.getenv("ETL_LOG_LEVEL", "INFO")
     LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    
+
+    # === MULTIPROCESSING CONFIG ===
+    # Number of concurrent jobs (1 = single mode, >1 = pool mode)
+    MAX_CONCURRENT_JOBS = int(os.getenv("ETL_MAX_CONCURRENT_JOBS", "1"))
+
+    # Timeout for orphan jobs in seconds (default: 4 hours)
+    JOB_SLOT_TIMEOUT = int(os.getenv("ETL_JOB_SLOT_TIMEOUT", "14400"))
+
+    # Cleanup interval for orphan jobs in seconds (default: 5 min)
+    JOB_CLEANUP_INTERVAL = int(os.getenv("ETL_JOB_CLEANUP_INTERVAL", "300"))
+
+    # === REDIS CONFIG (optional - for horizontal scaling) ===
+    REDIS_ENABLED = os.getenv("REDIS_ENABLED", "false").lower() == "true"
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    REDIS_CHANNEL_PREFIX = os.getenv("REDIS_CHANNEL_PREFIX", "etl")
+    REDIS_POOL_SIZE = int(os.getenv("REDIS_POOL_SIZE", "10"))
+    REDIS_SOCKET_TIMEOUT = float(os.getenv("REDIS_SOCKET_TIMEOUT", "5.0"))
+
     @classmethod
     def ensure_dirs(cls):
         """Cria diretorios necessarios se nao existirem"""

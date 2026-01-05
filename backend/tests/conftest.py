@@ -287,8 +287,15 @@ def authenticated_client(admin_token):
 
 @pytest.fixture
 def test_db(temp_db_path):
-    """Inicializa banco de dados de teste"""
+    """Inicializa banco de dados de teste com suporte a connection pool"""
     from core import database
+
+    # Fechar conexoes existentes do pool
+    database.close_connection()
+
+    # Limpar thread-local storage
+    if hasattr(database._local, 'conn'):
+        database._local.conn = None
 
     # Substituir caminho do banco
     original_path = database.DB_PATH
@@ -298,6 +305,13 @@ def test_db(temp_db_path):
     database.init_db()
 
     yield database
+
+    # Fechar conexoes do pool antes de restaurar
+    database.close_connection()
+
+    # Limpar thread-local storage
+    if hasattr(database._local, 'conn'):
+        database._local.conn = None
 
     # Restaurar
     database.DB_PATH = original_path

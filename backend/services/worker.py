@@ -1,5 +1,9 @@
 """
 Background Worker - Processa jobs da fila em background
+
+Supports two modes:
+- Single mode (MAX_CONCURRENT_JOBS=1): Original behavior, one job at a time
+- Pool mode (MAX_CONCURRENT_JOBS>1): Uses JobPoolManager for concurrent execution
 """
 import asyncio
 import json
@@ -27,7 +31,10 @@ logger = logging.getLogger(__name__)
 class BackgroundWorker:
     """
     Worker que roda em background processando jobs da fila.
-    Integra com WebSocket para enviar logs em tempo real.
+
+    Modes:
+    - MAX_CONCURRENT_JOBS=1: Single mode (original behavior)
+    - MAX_CONCURRENT_JOBS>1: Pool mode (concurrent execution)
     """
 
     def __init__(self, poll_interval: float = 2.0):
@@ -40,25 +47,49 @@ class BackgroundWorker:
         self.current_job_id: Optional[int] = None
         self._task: Optional[asyncio.Task] = None
 
+        # Pool manager (created if multiprocessing enabled)
+        self._pool_manager = None
+        self._use_pool = False
+
     async def start(self):
         """Inicia o worker em background"""
         if self.running:
             logger.warning("Worker ja esta rodando")
             return
 
+        from config import settings
+
         self.running = True
-        self._task = asyncio.create_task(self._run_loop())
-        logger.info("BackgroundWorker iniciado")
+        self._use_pool = settings.MAX_CONCURRENT_JOBS > 1
+
+        if self._use_pool:
+            # Pool mode - concurrent execution
+            from services.pool import create_pool_manager
+
+            self._pool_manager = create_pool_manager(
+                max_workers=settings.MAX_CONCURRENT_JOBS,
+                poll_interval=self.poll_interval
+            )
+            await self._pool_manager.start()
+            logger.info(f"BackgroundWorker started in POOL mode ({settings.MAX_CONCURRENT_JOBS} workers)")
+        else:
+            # Single mode - original behavior
+            self._task = asyncio.create_task(self._run_loop())
+            logger.info("BackgroundWorker started in SINGLE mode")
 
     async def stop(self):
         """Para o worker"""
         self.running = False
-        if self._task:
+
+        if self._use_pool and self._pool_manager:
+            await self._pool_manager.stop()
+        elif self._task:
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
+
         logger.info("BackgroundWorker parado")
 
     async def _run_loop(self):
@@ -217,12 +248,69 @@ class BackgroundWorker:
             except Exception as e:
                 logger.error(f"Erro ao broadcast job_complete: {e}")
 
-    def cancel_current_job(self):
-        """Cancela job em execucao"""
-        if self.current_job_id:
-            executor = get_executor()
-            executor.cancel()
-            logger.info(f"Job #{self.current_job_id} cancelado")
+    def cancel_current_job(self) -> bool:
+        """Cancels the currently running job (single mode only)"""
+        if self._use_pool and self._pool_manager:
+            # Pool mode - use cancel_job(job_id) instead
+            return False
+        else:
+            # Single mode
+            if self.current_job_id:
+                executor = get_executor()
+                executor.cancel()
+                logger.info(f"Job #{self.current_job_id} cancelled")
+                return True
+        return False
+
+    def cancel_job(self, job_id: int) -> bool:
+        """
+        Cancels a specific job by ID.
+
+        Args:
+            job_id: The job ID to cancel
+
+        Returns:
+            True if job was found and cancelled
+        """
+        if self._use_pool and self._pool_manager:
+            return self._pool_manager.cancel_job(job_id)
+        else:
+            # Single mode - can only cancel current job
+            if self.current_job_id == job_id:
+                return self.cancel_current_job()
+        return False
+
+    def get_pool_status(self) -> Optional[dict]:
+        """
+        Returns pool status if pool mode is active.
+
+        Returns:
+            Pool status dict or None if in single mode
+        """
+        if self._use_pool and self._pool_manager:
+            return self._pool_manager.get_status()
+        return None
+
+    def get_status(self) -> dict:
+        """
+        Returns worker status (works in both modes).
+
+        Returns:
+            Status dict with mode info and current state
+        """
+        if self._use_pool and self._pool_manager:
+            pool_status = self._pool_manager.get_status()
+            return {
+                "mode": "pool",
+                "running": self.running,
+                **pool_status
+            }
+        else:
+            return {
+                "mode": "single",
+                "running": self.running,
+                "current_job_id": self.current_job_id
+            }
 
 
 # Singleton
