@@ -20,6 +20,40 @@ def log(level: str, sistema: str, mensagem: str):
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[{level}] [{sistema}] {mensagem}", flush=True)
 
+
+def _get_default_credentials() -> dict:
+    """
+    Retorna estrutura padrao de credenciais (mesma do backend).
+    Usado como fallback quando nenhum arquivo de credenciais existe.
+    """
+    return {
+        "version": "2.0",
+        "amplis": {
+            "reag": {"url": "", "username": "", "password": ""},
+            "master": {"url": "", "username": "", "password": ""}
+        },
+        "maps": {"url": "", "username": "", "password": "", "fundos": [], "usar_todos": True, "fundos_selecionados": []},
+        "fidc": {"url": "", "username": "", "password": "", "fundos": [], "usar_todos": True, "fundos_selecionados": []},
+        "jcot": {"url": "", "username": "", "password": ""},
+        "britech": {"url": "", "username": "", "password": ""},
+        "qore": {"url": "", "username": "", "password": "", "fundos": [], "usar_todos": True, "fundos_selecionados": []},
+        "paths": {
+            "csv": "",
+            "pdf": "",
+            "maps": "",
+            "fidc": "",
+            "jcot": "",
+            "britech": "",
+            "qore_excel": "",
+            "qore_pdf": "",
+            "bd_xlsx": "",
+            "trustee": "",
+            "selenium_temp": ""
+        },
+        "fundos": {"selecionados": []}
+    }
+
+
 def load_credentials(config_path: str) -> dict:
     """
     Carrega credenciais do arquivo JSON (criptografado ou plaintext).
@@ -67,8 +101,15 @@ def load_credentials(config_path: str) -> dict:
         return data
 
     except FileNotFoundError:
-        log("ERROR", "SISTEMA", f"Arquivo de credenciais nao encontrado: {config_path}")
-        sys.exit(1)
+        log("WARN", "SISTEMA", "=" * 60)
+        log("WARN", "SISTEMA", f"Arquivo de credenciais nao encontrado: {config_path}")
+        log("WARN", "SISTEMA", "Usando configuracao PADRAO (credenciais vazias)")
+        log("WARN", "SISTEMA", "=" * 60)
+        log("WARN", "SISTEMA", "Para configurar credenciais:")
+        log("WARN", "SISTEMA", "  1. Acesse o Dashboard -> Configuracoes")
+        log("WARN", "SISTEMA", "  2. Ou crie o arquivo: backend/data/credentials.json")
+        log("WARN", "SISTEMA", "=" * 60)
+        return _get_default_credentials()
     except json.JSONDecodeError as e:
         log("ERROR", "SISTEMA", f"Erro ao ler JSON de credenciais: {e}")
         sys.exit(1)

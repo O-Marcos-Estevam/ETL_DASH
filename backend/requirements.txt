@@ -15,3 +15,9 @@ cryptography>=42.0.0
 
 # Redis (optional - for horizontal scaling with distributed WebSocket)
 redis>=5.0.0
+
+# ETL Dependencies
+selenium==4.18.1
+pandas==2.2.1
+openpyxl==3.1.2
+requests==2.31.0

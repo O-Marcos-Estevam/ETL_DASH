@@ -52,11 +52,22 @@ def create_driver(
     """
     options = Options()
     
-    # Usar Chrome portatil se disponivel
+    # Detectar ambiente Linux/Docker
+    import sys
+    is_linux = sys.platform.startswith('linux')
+    
+    # Usar Chrome portatil se disponivel (apenas Windows)
     chrome_path = get_chrome_path()
-    if chrome_path:
+    if chrome_path and not is_linux:
         options.binary_location = str(chrome_path)
         logger.info(f"Usando Chrome portatil: {chrome_path}")
+    elif is_linux:
+        # Docker/Linux: usar system binary
+        options.binary_location = "/usr/bin/chromium"
+        logger.info("Ambiente Linux detectado: Usando /usr/bin/chromium")
+        
+        # Forcar headless em Docker
+        headless = True
     
     # Configuracoes de download
     prefs = {
@@ -88,9 +99,13 @@ def create_driver(
     # Servico com ChromeDriver portatil
     service = None
     chromedriver_path = get_chromedriver_path()
-    if chromedriver_path:
+    if chromedriver_path and not is_linux:
         service = Service(str(chromedriver_path))
         logger.info(f"Usando ChromeDriver portatil: {chromedriver_path}")
+    elif is_linux:
+         # Docker/Linux: usar system driver
+         service = Service("/usr/bin/chromedriver")
+         logger.info("Ambiente Linux detectado: Usando /usr/bin/chromedriver")
     
     # Criar driver
     driver = webdriver.Chrome(options=options, service=service)

@@ -46,6 +46,28 @@ async def lifespan(_app: FastAPI):
             "Set the environment variable or credentials will use defaults."
         )
 
+    # Initialize credentials service (creates default file if none exists)
+    from services.credentials import ConfigService
+    config_service = ConfigService()
+    creds = config_service.get_credentials()
+
+    # Check if using defaults (empty passwords indicate no real config)
+    has_any_credential = any([
+        creds.get("amplis", {}).get("reag", {}).get("password"),
+        creds.get("amplis", {}).get("master", {}).get("password"),
+        creds.get("maps", {}).get("password"),
+        creds.get("fidc", {}).get("password"),
+        creds.get("jcot", {}).get("password"),
+        creds.get("britech", {}).get("password"),
+        creds.get("qore", {}).get("password"),
+    ])
+
+    if not has_any_credential:
+        logger.warning(
+            "⚠️  No credentials configured! "
+            "Go to Dashboard -> Settings to configure system credentials."
+        )
+
     # Initialize WebSocket manager (supports Redis for distributed mode)
     from services.distributed_ws import create_ws_manager
     ws_manager = create_ws_manager()
@@ -301,8 +323,13 @@ if __name__ == "__main__":
         
         # Verificar porta 4002
         if not check_port_available(settings.HOST, settings.PORT):
-            logger.error(f"Porta {settings.PORT} tambem esta em uso!")
-            logger.error("Por favor, encerre processos Python ou configure outra porta via ETL_PORT")
+            logger.error("=" * 60)
+            logger.error("ERRO: Portas 4001 e 4002 estao em uso!")
+            logger.error("")
+            logger.error("Solucoes:")
+            logger.error("  1. Encerre outros processos Python")
+            logger.error("  2. Defina outra porta: set ETL_PORT=4003")
+            logger.error("=" * 60)
             sys.exit(1)
     
     logger.info(f"Iniciando servidor em {settings.HOST}:{settings.PORT}")
