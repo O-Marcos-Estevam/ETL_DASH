@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETL_DASH - Diagramas de Arquitetura</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+
+        .diagram-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .diagram-title {
+            font-size: 1.5rem;
+            margin-bottom: 25px;
+            color: #00d9ff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .diagram-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, #00d9ff, #00ff88);
+            border-radius: 2px;
+        }
+
+        /* Arquitetura Geral */
+        .architecture {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            padding: 20px;
+        }
+
+        .arch-box {
+            background: linear-gradient(145deg, #2a2a4a, #1a1a3a);
+            border-radius: 12px;
+            padding: 25px;
+            min-width: 200px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .arch-box:hover {
+            transform: translateY(-5px);
+            border-color: #00d9ff;
+            box-shadow: 0 10px 40px rgba(0, 217, 255, 0.2);
+        }
+
+        .arch-box.frontend {
+            border-color: #ff6b6b;
+        }
+
+        .arch-box.backend {
+            border-color: #4ecdc4;
+        }
+
+        .arch-box.python {
+            border-color: #ffe66d;
+        }
+
+        .arch-box.database {
+            border-color: #a66cff;
+        }
+
+        .arch-box.redis {
+            border-color: #ff6b6b;
+        }
+
+        .arch-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .arch-label {
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+        }
+
+        .arch-tech {
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .arrow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #00d9ff;
+        }
+
+        .arrow-line {
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            position: relative;
+        }
+
+        .arrow-line::after {
+            content: '▶';
+            position: absolute;
+            right: -10px;
+            top: -8px;
+            font-size: 14px;
+        }
+
+        .arrow-label {
+            font-size: 0.75rem;
+            margin-top: 5px;
+            color: #888;
+        }
+
+        /* Fluxo de Execução */
+        .flow-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .flow-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            border-left: 4px solid;
+            transition: all 0.3s ease;
+        }
+
+        .flow-step:hover {
+            background: rgba(0, 0, 0, 0.3);
+            transform: translateX(10px);
+        }
+
+        .flow-step.step-1 { border-color: #ff6b6b; }
+        .flow-step.step-2 { border-color: #4ecdc4; }
+        .flow-step.step-3 { border-color: #ffe66d; }
+        .flow-step.step-4 { border-color: #a66cff; }
+        .flow-step.step-5 { border-color: #ff6b6b; }
+        .flow-step.step-6 { border-color: #00d9ff; }
+        .flow-step.step-7 { border-color: #00ff88; }
+
+        .step-number {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .step-1 .step-number { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
+        .step-2 .step-number { background: rgba(78, 205, 196, 0.2); color: #4ecdc4; }
+        .step-3 .step-number { background: rgba(255, 230, 109, 0.2); color: #ffe66d; }
+        .step-4 .step-number { background: rgba(166, 108, 255, 0.2); color: #a66cff; }
+        .step-5 .step-number { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
+        .step-6 .step-number { background: rgba(0, 217, 255, 0.2); color: #00d9ff; }
+        .step-7 .step-number { background: rgba(0, 255, 136, 0.2); color: #00ff88; }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+
+        .step-description {
+            color: #aaa;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .step-file {
+            display: inline-block;
+            background: rgba(0, 217, 255, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #00d9ff;
+            margin-top: 8px;
+        }
+
+        /* WebSocket Protocol */
+        .ws-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .ws-message {
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ws-header {
+            padding: 15px 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .ws-message.log .ws-header { background: rgba(0, 217, 255, 0.1); color: #00d9ff; }
+        .ws-message.status .ws-header { background: rgba(255, 230, 109, 0.1); color: #ffe66d; }
+        .ws-message.complete .ws-header { background: rgba(0, 255, 136, 0.1); color: #00ff88; }
+
+        .ws-body {
+            padding: 15px 20px;
+        }
+
+        .ws-code {
+            background: #0d0d1a;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            line-height: 1.5;
+        }
+
+        .ws-code .key { color: #ff6b6b; }
+        .ws-code .string { color: #00ff88; }
+        .ws-code .number { color: #ffe66d; }
+
+        /* Sistemas ETL */
+        .systems-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .system-card {
+            background: linear-gradient(145deg, #2a2a4a, #1a1a3a);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .system-card:hover {
+            transform: scale(1.02);
+            border-color: #00d9ff;
+        }
+
+        .system-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+        }
+
+        .system-name {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+        }
+
+        .system-module {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #00d9ff;
+            margin-bottom: 10px;
+        }
+
+        .system-desc {
+            font-size: 0.9rem;
+            color: #888;
+        }
+
+        /* Sequence Diagram */
+        .sequence-container {
+            overflow-x: auto;
+            padding: 20px;
+        }
+
+        .sequence {
+            display: flex;
+            min-width: 900px;
+        }
+
+        .sequence-actor {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+
+        .actor-box {
+            background: linear-gradient(145deg, #2a2a4a, #1a1a3a);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 2px solid;
+        }
+
+        .sequence-actor:nth-child(1) .actor-box { border-color: #ff6b6b; }
+        .sequence-actor:nth-child(2) .actor-box { border-color: #4ecdc4; }
+        .sequence-actor:nth-child(3) .actor-box { border-color: #ffe66d; }
+        .sequence-actor:nth-child(4) .actor-box { border-color: #a66cff; }
+
+        .actor-line {
+            width: 2px;
+            height: 400px;
+            background: rgba(255, 255, 255, 0.2);
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .seq-message {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        /* Modes Diagram */
+        .modes-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            padding: 20px;
+        }
+
+        .mode-box {
+            background: linear-gradient(145deg, #2a2a4a, #1a1a3a);
+            border-radius: 12px;
+            padding: 25px;
+            border: 2px solid;
+        }
+
+        .mode-box.single { border-color: #4ecdc4; }
+        .mode-box.pool { border-color: #a66cff; }
+
+        .mode-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mode-visual {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .worker-box {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px 25px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .slot-box {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .slot-box.active {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .mode-desc {
+            color: #888;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* Credentials Flow */
+        .cred-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 20px;
+        }
+
+        .cred-step {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .cred-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .cred-step:nth-child(1) .cred-icon { background: rgba(255, 107, 107, 0.2); }
+        .cred-step:nth-child(2) .cred-icon { background: rgba(78, 205, 196, 0.2); }
+        .cred-step:nth-child(3) .cred-icon { background: rgba(0, 255, 136, 0.2); }
+
+        .cred-arrow {
+            text-align: center;
+            color: #00d9ff;
+            font-size: 1.5rem;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 { font-size: 1.8rem; }
+            .architecture { flex-direction: column; }
+            .arrow { transform: rotate(90deg); margin: 10px 0; }
+            .modes-container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 ETL_DASH</h1>
+        <p class="subtitle">Diagramas de Arquitetura e Fluxo do Sistema</p>
+
+        <!-- Arquitetura Geral -->
+        <div class="diagram-section">
+            <h2 class="diagram-title">Arquitetura Geral</h2>
+            <div class="architecture">
+                <div class="arch-box frontend">
+                    <div class="arch-icon">🖥️</div>
+                    <div class="arch-label">Frontend</div>
+                    <div class="arch-tech">React 19 + TypeScript + Vite</div>
+                </div>
+
+                <div class="arrow">
+                    <div class="arrow-line"></div>
+                    <div class="arrow-label">HTTP/WebSocket</div>
+                </div>
+
+                <div class="arch-box backend">
+                    <div class="arch-icon">⚙️</div>
+                    <div class="arch-label">Backend</div>
+                    <div class="arch-tech">FastAPI + SQLite + JWT</div>
+                </div>
+
+                <div class="arrow">
+                    <div class="arrow-line"></div>
+                    <div class="arrow-label">Subprocess</div>
+                </div>
+
+                <div class="arch-box python">
+                    <div class="arch-icon">🐍</div>
+                    <div class="arch-label">Python ETL</div>
+                    <div class="arch-tech">Selenium + Pandas + ODBC</div>
+                </div>
+            </div>
+
+            <div class="architecture" style="margin-top: 30px;">
+                <div class="arch-box database">
+                    <div class="arch-icon">🗄️</div>
+                    <div class="arch-label">SQLite</div>
+                    <div class="arch-tech">Jobs + Auth + Logs</div>
+                </div>
+
+                <div class="arch-box redis">
+                    <div class="arch-icon">📡</div>
+                    <div class="arch-label">Redis (Opcional)</div>
+                    <div class="arch-tech">Streams + Distribuído</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fluxo de Execução -->
+        <div class="diagram-section">
+            <h2 class="diagram-title">Fluxo de Execução ETL</h2>
+            <div class="flow-container">
+                <div class="flow-step step-1">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <div class="step-title">👆 Usuário Inicia Execução</div>
+                        <div class="step-description">
+                            Usuário seleciona sistemas (AMPLIS, MAPS, FIDC...), define período de datas e clica em "Executar".
+                            O frontend chama <code>api.executePipeline()</code>.
+                        </div>
+                        <div class="step-file">frontend/src/pages/etl/page.tsx</div>
+                    </div>
+                </div>
+
+                <div class="flow-step step-2">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <div class="step-title">📥 Backend Enfileira Job</div>
+                        <div class="step-description">
+                            Backend recebe requisição, valida autenticação (admin), verifica slots disponíveis
+                            e cria job no banco SQLite com status "pending".
+                        </div>
+                        <div class="step-file">backend/routers/execution.py</div>
+                    </div>
+                </div>
+
+                <div class="flow-step step-3">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <div class="step-title">⏰ Worker Processa Fila</div>
+                        <div class="step-description">
+                            BackgroundWorker faz polling a cada 2 segundos, busca próximo job pendente,
+                            marca como "running" e delega para o Executor.
+                        </div>
+                        <div class="step-file">backend/services/worker.py</div>
+                    </div>
+                </div>
+
+                <div class="flow-step step-4">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <div class="step-title">🚀 Executor Cria Subprocess</div>
+                        <div class="step-description">
+                            ETLExecutor monta comando com argumentos (sistemas, datas, opções) e executa
+                            <code>python main.py</code> como subprocess assíncrono, capturando stdout.
+                        </div>
+                        <div class="step-file">backend/services/executor.py</div>
+                    </div>
+                </div>
+
+                <div class="flow-step step-5">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <div class="step-title">🐍 Python ETL Executa</div>
+                        <div class="step-description">
+                            Script main.py carrega credenciais (criptografadas ou plaintext),
+                            importa módulos específicos e executa cada sistema sequencialmente.
+                            Logs são emitidos no formato <code>[LEVEL] [SISTEMA] Mensagem</code>.
+                        </div>
+                        <div class="step-file">python/main.py</div>
+                    </div>
+                </div>
+
+                <div class="flow-step step-6">
+                    <div class="step-number">6</div>
+                    <div class="step-content">
+                        <div class="step-title">📡 WebSocket Broadcast</div>
+                        <div class="step-description">
+                            Cada linha de log é parseada, salva no banco e transmitida via WebSocket
+                            para todos os clientes conectados. Em modo Redis, é publicada para outras instâncias.
+                        </div>
+                        <div class="step-file">backend/services/distributed_ws.py</div>
+                    </div>
+                </div>
+
+                <div class="flow-step step-7">
+                    <div class="step-number">7</div>
+                    <div class="step-content">
+                        <div class="step-title">✅ Frontend Atualiza UI</div>
+                        <div class="step-description">
+                            React recebe mensagens WebSocket e atualiza a interface em tempo real:
+                            logs, status dos sistemas, progresso. Ao receber "job_complete", exibe notificação.
+                        </div>
+                        <div class="step-file">frontend/src/pages/etl/page.tsx</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Protocolo WebSocket -->
+        <div class="diagram-section">
+            <h2 class="diagram-title">Protocolo WebSocket</h2>
+            <div class="ws-container">
+                <div class="ws-message log">
+                    <div class="ws-header">📝 LOG</div>
+                    <div class="ws-body">
+                        <div class="ws-code">
+{<br>
+&nbsp;&nbsp;<span class="key">"type"</span>: <span class="string">"log"</span>,<br>
+&nbsp;&nbsp;<span class="key">"payload"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"level"</span>: <span class="string">"INFO"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"sistema"</span>: <span class="string">"MAPS"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"mensagem"</span>: <span class="string">"Baixando arquivos..."</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"job_id"</span>: <span class="number">42</span><br>
+&nbsp;&nbsp;}<br>
+}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ws-message status">
+                    <div class="ws-header">🔄 STATUS</div>
+                    <div class="ws-body">
+                        <div class="ws-code">
+{<br>
+&nbsp;&nbsp;<span class="key">"type"</span>: <span class="string">"status"</span>,<br>
+&nbsp;&nbsp;<span class="key">"payload"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"sistema_id"</span>: <span class="string">"maps"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"status"</span>: <span class="string">"RUNNING"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"progresso"</span>: <span class="number">50</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"mensagem"</span>: <span class="string">"Processando..."</span><br>
+&nbsp;&nbsp;}<br>
+}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ws-message complete">
+                    <div class="ws-header">✅ JOB_COMPLETE</div>
+                    <div class="ws-body">
+                        <div class="ws-code">
+{<br>
+&nbsp;&nbsp;<span class="key">"type"</span>: <span class="string">"job_complete"</span>,<br>
+&nbsp;&nbsp;<span class="key">"payload"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"job_id"</span>: <span class="number">42</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"status"</span>: <span class="string">"completed"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"duracao_segundos"</span>: <span class="number">120</span><br>
+&nbsp;&nbsp;}<br>
+}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sistemas ETL -->
+        <div class="diagram-section">
+            <h2 class="diagram-title">Sistemas ETL Suportados</h2>
+            <div class="systems-grid">
+                <div class="system-card">
+                    <div class="system-icon">📊</div>
+                    <div class="system-name">AMPLIS</div>
+                    <div class="system-module">amplis_V02.py</div>
+                    <div class="system-desc">Download de CSV e PDF via Selenium. Suporta contas REAG e MASTER.</div>
+                </div>
+
+                <div class="system-card">
+                    <div class="system-icon">🗺️</div>
+                    <div class="system-name">MAPS</div>
+                    <div class="system-module">maps_download_consolidado.py</div>
+                    <div class="system-desc">Download e consolidação de dados Excel. Processamento de Ativo/Passivo.</div>
+                </div>
+
+                <div class="system-card">
+                    <div class="system-icon">💰</div>
+                    <div class="system-name">FIDC</div>
+                    <div class="system-module">FIDC_ESTOQUE_V02.py</div>
+                    <div class="system-desc">Extração de dados via ODBC. Query em banco de dados financeiro.</div>
+                </div>
+
+                <div class="system-card">
+                    <div class="system-icon">📈</div>
+                    <div class="system-name">JCOT</div>
+                    <div class="system-module">Jcot_V02.py</div>
+                    <div class="system-desc">Integração com sistema JCOT para cotações e dados de mercado.</div>
+                </div>
+
+                <div class="system-card">
+                    <div class="system-icon">🔌</div>
+                    <div class="system-name">BRITECH</div>
+                    <div class="system-module">query_britech_V02.py</div>
+                    <div class="system-desc">Query direta na API BRITECH para extração de dados.</div>
+                </div>
+
+                <div class="system-card">
+                    <div class="system-icon">🤖</div>
+                    <div class="system-name">QORE</div>
+                    <div class="system-module">automacao_qore_v5.py</div>
+                    <div class="system-desc">Automação web complexa via Selenium. Download de Excel e PDF em lote.</div>
+                </div>
+
+                <div class="system-card">
+                    <div class="system-icon">🏦</div>
+                    <div class="system-name">TRUSTEE</div>
+                    <div class="system-module">Externo (.bat)</div>
+                    <div class="system-desc">Execução de script .bat externo para integração com Trustee.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modos de Execução -->
+        <div class="diagram-section">
+            <h2 class="diagram-title">Modos de Execução</h2>
+            <div class="modes-container">
+                <div class="mode-box single">
+                    <div class="mode-title">
+                        <span style="color: #4ecdc4;">⚡</span>
+                        Single Mode
+                    </div>
+                    <div class="mode-visual">
+                        <div class="worker-box">
+                            🔧 Worker
+                        </div>
+                        <span style="color: #4ecdc4; font-size: 1.5rem;">→</span>
+                        <div class="slot-box active">
+                            Job A (running)
+                        </div>
+                    </div>
+                    <div class="mode-desc">
+                        <strong>MAX_CONCURRENT_JOBS = 1</strong><br><br>
+                        Apenas um job por vez. Jobs subsequentes aguardam na fila.
+                        Ideal para ambientes com recursos limitados ou quando a ordem é importante.
+                    </div>
+                </div>
+
+                <div class="mode-box pool">
+                    <div class="mode-title">
+                        <span style="color: #a66cff;">🚀</span>
+                        Pool Mode
+                    </div>
+                    <div class="mode-visual">
+                        <div class="worker-box">
+                            🏊 Pool Manager
+                        </div>
+                        <span style="color: #a66cff; font-size: 1.5rem;">→</span>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div class="slot-box active">Slot 0: Job A</div>
+                            <div class="slot-box active">Slot 1: Job B</div>
+                            <div class="slot-box">Slot 2: idle</div>
+                        </div>
+                    </div>
+                    <div class="mode-desc">
+                        <strong>MAX_CONCURRENT_JOBS > 1</strong><br><br>
+                        Múltiplos jobs em paralelo. Cada slot tem seu próprio executor isolado.
+                        Ideal para processamento em lote e melhor utilização de recursos.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fluxo de Credenciais -->
+        <div class="diagram-section">
+            <h2 class="diagram-title">Fluxo de Credenciais</h2>
+            <div class="cred-flow">
+                <div class="cred-step">
+                    <div class="cred-icon">🔐</div>
+                    <div class="step-content">
+                        <div class="step-title">1. Configuração via UI</div>
+                        <div class="step-description">
+                            Usuário configura credenciais na página Settings.
+                            Frontend envia para <code>POST /api/credentials</code>.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cred-arrow">↓</div>
+
+                <div class="cred-step">
+                    <div class="cred-icon">🔒</div>
+                    <div class="step-content">
+                        <div class="step-title">2. Criptografia AES-256-GCM</div>
+                        <div class="step-description">
+                            Backend usa <code>CryptoService</code> com PBKDF2 (600k iterações) para derivar chave
+                            da <code>ETL_MASTER_KEY</code>. Salva em <code>credentials.encrypted.json</code>.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cred-arrow">↓</div>
+
+                <div class="cred-step">
+                    <div class="cred-icon">🔓</div>
+                    <div class="step-content">
+                        <div class="step-title">3. Descriptografia na Execução</div>
+                        <div class="step-description">
+                            Script <code>main.py</code> carrega credenciais, detecta formato criptografado,
+                            e usa <code>ETLCrypto</code> para descriptografar em memória antes de usar.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Diagrama de Sequência Simplificado -->
+        <div class="diagram-section">
+            <h2 class="diagram-title">Diagrama de Sequência</h2>
+            <div class="sequence-container">
+                <svg viewBox="0 0 1000 500" style="width: 100%; max-width: 1000px; margin: 0 auto; display: block;">
+                    <!-- Actors -->
+                    <rect x="50" y="20" width="120" height="40" rx="8" fill="#ff6b6b22" stroke="#ff6b6b" stroke-width="2"/>
+                    <text x="110" y="45" text-anchor="middle" fill="#ff6b6b" font-weight="bold">Usuário</text>
+
+                    <rect x="250" y="20" width="120" height="40" rx="8" fill="#4ecdc422" stroke="#4ecdc4" stroke-width="2"/>
+                    <text x="310" y="45" text-anchor="middle" fill="#4ecdc4" font-weight="bold">Frontend</text>
+
+                    <rect x="450" y="20" width="120" height="40" rx="8" fill="#ffe66d22" stroke="#ffe66d" stroke-width="2"/>
+                    <text x="510" y="45" text-anchor="middle" fill="#ffe66d" font-weight="bold">Backend</text>
+
+                    <rect x="650" y="20" width="120" height="40" rx="8" fill="#a66cff22" stroke="#a66cff" stroke-width="2"/>
+                    <text x="710" y="45" text-anchor="middle" fill="#a66cff" font-weight="bold">Worker</text>
+
+                    <rect x="850" y="20" width="120" height="40" rx="8" fill="#00ff8822" stroke="#00ff88" stroke-width="2"/>
+                    <text x="910" y="45" text-anchor="middle" fill="#00ff88" font-weight="bold">Python ETL</text>
+
+                    <!-- Lifelines -->
+                    <line x1="110" y1="60" x2="110" y2="480" stroke="#ff6b6b44" stroke-width="2" stroke-dasharray="5,5"/>
+                    <line x1="310" y1="60" x2="310" y2="480" stroke="#4ecdc444" stroke-width="2" stroke-dasharray="5,5"/>
+                    <line x1="510" y1="60" x2="510" y2="480" stroke="#ffe66d44" stroke-width="2" stroke-dasharray="5,5"/>
+                    <line x1="710" y1="60" x2="710" y2="480" stroke="#a66cff44" stroke-width="2" stroke-dasharray="5,5"/>
+                    <line x1="910" y1="60" x2="910" y2="480" stroke="#00ff8844" stroke-width="2" stroke-dasharray="5,5"/>
+
+                    <!-- Messages -->
+                    <!-- 1. Click Execute -->
+                    <line x1="110" y1="100" x2="310" y2="100" stroke="#00d9ff" stroke-width="2" marker-end="url(#arrow)"/>
+                    <text x="210" y="90" text-anchor="middle" fill="#888" font-size="12">1. Clica Executar</text>
+
+                    <!-- 2. POST /api/execute -->
+                    <line x1="310" y1="140" x2="510" y2="140" stroke="#00d9ff" stroke-width="2" marker-end="url(#arrow)"/>
+                    <text x="410" y="130" text-anchor="middle" fill="#888" font-size="12">2. POST /api/execute</text>
+
+                    <!-- 3. Return job_id -->
+                    <line x1="510" y1="180" x2="310" y2="180" stroke="#00ff88" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrow)"/>
+                    <text x="410" y="170" text-anchor="middle" fill="#888" font-size="12">3. { job_id: 42 }</text>
+
+                    <!-- 4. Poll job -->
+                    <line x1="510" y1="220" x2="710" y2="220" stroke="#ffe66d" stroke-width="2" marker-end="url(#arrow)"/>
+                    <text x="610" y="210" text-anchor="middle" fill="#888" font-size="12">4. get_next_job()</text>
+
+                    <!-- 5. Execute subprocess -->
+                    <line x1="710" y1="260" x2="910" y2="260" stroke="#a66cff" stroke-width="2" marker-end="url(#arrow)"/>
+                    <text x="810" y="250" text-anchor="middle" fill="#888" font-size="12">5. subprocess</text>
+
+                    <!-- 6. Logs stdout -->
+                    <line x1="910" y1="300" x2="710" y2="300" stroke="#00ff88" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrow)"/>
+                    <text x="810" y="290" text-anchor="middle" fill="#888" font-size="12">6. [INFO] [MAPS]...</text>
+
+                    <!-- 7. WebSocket broadcast -->
+                    <line x1="510" y1="340" x2="310" y2="340" stroke="#00d9ff" stroke-width="2" marker-end="url(#arrow)"/>
+                    <text x="410" y="330" text-anchor="middle" fill="#888" font-size="12">7. WS: log</text>
+
+                    <!-- 8. Update UI -->
+                    <line x1="310" y1="380" x2="110" y2="380" stroke="#ff6b6b" stroke-width="2" marker-end="url(#arrow)"/>
+                    <text x="210" y="370" text-anchor="middle" fill="#888" font-size="12">8. Atualiza UI</text>
+
+                    <!-- 9. Job complete -->
+                    <line x1="510" y1="420" x2="310" y2="420" stroke="#00ff88" stroke-width="2" marker-end="url(#arrow)"/>
+                    <text x="410" y="410" text-anchor="middle" fill="#888" font-size="12">9. WS: job_complete</text>
+
+                    <!-- 10. Show toast -->
+                    <line x1="310" y1="460" x2="110" y2="460" stroke="#00ff88" stroke-width="2" marker-end="url(#arrow)"/>
+                    <text x="210" y="450" text-anchor="middle" fill="#888" font-size="12">10. Toast: Concluído!</text>
+
+                    <!-- Arrow marker definition -->
+                    <defs>
+                        <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                            <path d="M0,0 L0,6 L9,3 z" fill="#00d9ff"/>
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>ETL_DASH - Sistema de Gerenciamento de Pipelines ETL</p>
+            <p>Documentação gerada automaticamente</p>
+        </div>
+    </div>
+</body>
+</html>
