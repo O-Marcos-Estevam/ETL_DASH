@@ -38,6 +38,14 @@ async def lifespan(_app: FastAPI):
     init_auth_tables()
     logger.info("Auth tables inicializadas")
 
+    # Check for ETL_MASTER_KEY (required for encrypted credentials)
+    import os
+    if not os.getenv("ETL_MASTER_KEY"):
+        logger.warning(
+            "⚠️  ETL_MASTER_KEY not set! Encrypted credentials will NOT work. "
+            "Set the environment variable or credentials will use defaults."
+        )
+
     # Initialize WebSocket manager (supports Redis for distributed mode)
     from services.distributed_ws import create_ws_manager
     ws_manager = create_ws_manager()

@@ -34,6 +34,17 @@ def load_credentials(config_path: str) -> dict:
 
         # Verificar se esta criptografado
         if "encryption" in data:
+            # Check if ETL_MASTER_KEY is set BEFORE attempting decryption
+            if not os.getenv("ETL_MASTER_KEY"):
+                log("ERROR", "SISTEMA", "=" * 60)
+                log("ERROR", "SISTEMA", "CREDENCIAIS CRIPTOGRAFADAS - ETL_MASTER_KEY NAO CONFIGURADA!")
+                log("ERROR", "SISTEMA", "=" * 60)
+                log("ERROR", "SISTEMA", "Para resolver:")
+                log("ERROR", "SISTEMA", "  1. Configure: set ETL_MASTER_KEY=<sua_chave_mestre>")
+                log("ERROR", "SISTEMA", "  2. Ou use arquivo credentials.json (plaintext)")
+                log("ERROR", "SISTEMA", "=" * 60)
+                sys.exit(1)
+
             try:
                 from crypto import ETLCrypto
                 crypto = ETLCrypto()
@@ -42,10 +53,13 @@ def load_credentials(config_path: str) -> dict:
                 return decrypted
             except ValueError as e:
                 log("ERROR", "SISTEMA", f"Erro de criptografia: {e}")
-                log("ERROR", "SISTEMA", "Configure a variavel ETL_MASTER_KEY para descriptografar")
+                log("ERROR", "SISTEMA", "Verifique se ETL_MASTER_KEY esta correta")
                 sys.exit(1)
             except ImportError:
-                log("ERROR", "SISTEMA", "Modulo crypto nao encontrado")
+                log("ERROR", "SISTEMA", "Modulo crypto nao encontrado - instale cryptography")
+                sys.exit(1)
+            except Exception as e:
+                log("ERROR", "SISTEMA", f"Erro ao descriptografar: {e}")
                 sys.exit(1)
 
         # Formato plaintext
