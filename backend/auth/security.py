@@ -3,7 +3,7 @@ Security Utilities
 
 Password hashing and JWT token operations.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 import hashlib
 import secrets
@@ -64,16 +64,16 @@ def create_access_token(
         Encoded JWT access token.
     """
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + auth_settings.access_token_expires
+        expire = datetime.now(timezone.utc) + auth_settings.access_token_expires
 
     payload = {
         "sub": username,
         "user_id": user_id,
         "role": role.value if isinstance(role, UserRole) else role,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
         "type": "access"
     }
 
@@ -100,14 +100,14 @@ def create_refresh_token(
     Returns:
         Tuple of (refresh_token, token_hash).
     """
-    expire = datetime.utcnow() + auth_settings.refresh_token_expires
+    expire = datetime.now(timezone.utc) + auth_settings.refresh_token_expires
 
     payload = {
         "sub": username,
         "user_id": user_id,
         "role": role.value if isinstance(role, UserRole) else role,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
         "type": "refresh",
         "jti": secrets.token_hex(16)  # Unique token ID
     }

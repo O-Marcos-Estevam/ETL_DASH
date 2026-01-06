@@ -55,6 +55,10 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
+    # Enable WAL mode for better concurrency
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+
     # Create Jobs Table
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS jobs (
@@ -77,37 +81,34 @@ def init_db():
     migrate_db()
 
 def add_job(job_type, params):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
-    
+
     now = datetime.now().isoformat()
     params_json = json.dumps(params)
-    
+
     cursor.execute('''
     INSERT INTO jobs (type, params, status, created_at)
     VALUES (?, ?, ?, ?)
     ''', (job_type, params_json, 'pending', now))
-    
+
     job_id = cursor.lastrowid
     conn.commit()
-    conn.close()
     return job_id
 
 def get_job(job_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute('SELECT * FROM jobs WHERE id = ?', (job_id,))
     row = cursor.fetchone()
-    conn.close()
-    
+
     if row:
         return dict(row)
     return None
 
 def update_job_status(job_id, status, error=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_connection()
     cursor = conn.cursor()
 
     now = datetime.now().isoformat()
@@ -120,26 +121,22 @@ def update_job_status(job_id, status, error=None):
         cursor.execute('UPDATE jobs SET status = ? WHERE id = ?', (status, job_id))
 
     conn.commit()
-    conn.close()
 
 def append_log(job_id, message):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor() # A bit inefficient to open/close for every log, but safer for concurrent access in SQLite
-    
+    conn = get_connection()
+    cursor = conn.cursor()
+
     # Append to existing logs
     cursor.execute('UPDATE jobs SET logs = logs || ? || "\n" WHERE id = ?', (message, job_id))
-    
+
     conn.commit()
-    conn.close()
 
 def get_pending_job():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute('SELECT * FROM jobs WHERE status = "pending" ORDER BY created_at ASC LIMIT 1')
     row = cursor.fetchone()
-    conn.close()
 
     if row:
         return dict(row)
@@ -148,13 +145,11 @@ def get_pending_job():
 
 def get_running_job():
     """Retorna job em execucao, se houver"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute('SELECT * FROM jobs WHERE status = "running" ORDER BY started_at DESC LIMIT 1')
     row = cursor.fetchone()
-    conn.close()
 
     if row:
         return dict(row)
@@ -163,8 +158,7 @@ def get_running_job():
 
 def list_jobs(status=None, limit=20, offset=0):
     """Lista jobs com filtro opcional por status"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_connection()
     cursor = conn.cursor()
 
     if status:
@@ -179,7 +173,6 @@ def list_jobs(status=None, limit=20, offset=0):
         )
 
     rows = cursor.fetchall()
-    conn.close()
 
     return [dict(row) for row in rows]
 
@@ -264,6 +257,10 @@ def migrate_db():
     """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+
+    # Enable WAL mode for better concurrency
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
 
     # Check if worker_slot column exists
     cursor.execute("PRAGMA table_info(jobs)")

@@ -11,7 +11,7 @@ import base64
 import json
 import logging
 from typing import Any, Dict, Optional, Set
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,7 @@ class CryptoService:
                 "kdf": self.KDF,
                 "iterations": self.ITERATIONS,
                 "salt": base64.b64encode(salt).decode('ascii'),
-                "created_at": datetime.utcnow().isoformat() + "Z"
+                "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             }
         }
 

@@ -3,6 +3,7 @@
  */
 import type { LogEntry, StatusUpdate } from '@/types/etl';
 import { getAccessToken } from './authApi';
+import { WS_BASE } from '@/lib/constants';
 
 // Extended log entry with job_id from backend
 export interface WSLogEntry extends LogEntry {
@@ -42,8 +43,13 @@ class WebSocketService {
                 this.reconnectTimer = null;
             }
 
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            let wsUrl = `${protocol}//${window.location.hostname}:4001/ws`;
+            // Use WS_BASE from constants (respects VITE_WS_URL env var)
+            // Upgrade to wss: if page is served over https:
+            let wsBaseUrl = WS_BASE;
+            if (window.location.protocol === 'https:') {
+                wsBaseUrl = wsBaseUrl.replace(/^ws:/, 'wss:');
+            }
+            let wsUrl = `${wsBaseUrl}/ws`;
 
             // Add authentication token if available
             const token = getAccessToken();

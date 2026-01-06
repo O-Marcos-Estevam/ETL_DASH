@@ -8,6 +8,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from datetime import datetime, timedelta
 from typing import Dict
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -23,6 +26,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = window_seconds
         self.requests: Dict[str, Dict] = {}
         self._lock = asyncio.Lock()
+        self._cleanup_task: asyncio.Task | None = None
 
         # Endpoint-specific limits (requests per minute)
         self.endpoint_limits = {
@@ -42,6 +46,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         }
 
     async def dispatch(self, request: Request, call_next):
+        # Start cleanup task on first request (when event loop is available)
+        if self._cleanup_task is None:
+            self._cleanup_task = asyncio.create_task(self.cleanup_old_entries())
+
         # Skip rate limiting for certain endpoints
         path = request.url.path
         if path in self.skip_endpoints:
@@ -140,18 +148,28 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return limit
 
     async def cleanup_old_entries(self):
-        """Periodically clean up old rate limit entries"""
+        """Periodically clean up old rate limit entries to prevent memory leak"""
+        logger.info("Rate limiter cleanup task started")
         while True:
-            await asyncio.sleep(300)  # Every 5 minutes
+            try:
+                await asyncio.sleep(300)  # Every 5 minutes
 
-            async with self._lock:
-                now = datetime.now()
-                cutoff = now - timedelta(seconds=self.window_seconds * 2)
+                async with self._lock:
+                    now = datetime.now()
+                    cutoff = now - timedelta(seconds=self.window_seconds * 2)
 
-                to_delete = [
-                    key for key, entry in self.requests.items()
-                    if entry["window_start"] < cutoff
-                ]
+                    to_delete = [
+                        key for key, entry in self.requests.items()
+                        if entry["window_start"] < cutoff
+                    ]
 
-                for key in to_delete:
-                    del self.requests[key]
+                    for key in to_delete:
+                        del self.requests[key]
+
+                    if to_delete:
+                        logger.debug(f"Rate limiter cleanup: removed {len(to_delete)} stale entries")
+            except asyncio.CancelledError:
+                logger.info("Rate limiter cleanup task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Rate limiter cleanup error: {e}")
